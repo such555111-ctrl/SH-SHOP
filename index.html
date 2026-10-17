@@ -460,6 +460,32 @@
   .card:nth-child(9){animation-delay:440ms;}
   .card:nth-child(10){animation-delay:495ms;}
   @media (prefers-reduced-motion:reduce){.smoke i,.ticker-wrap,.hero::before,.hero-cta::after,.btn-primary::after,.badge-hit,.chip.active,.section-title::before{animation:none!important;}}
+
+  /* ---------- подкатегории ---------- */
+  .subfilters{display:flex;gap:7px;overflow-x:auto;padding:4px 18px 8px;scrollbar-width:none;}
+  .subfilters::-webkit-scrollbar{display:none;}
+  .subfilters:empty{display:none;}
+  .subchip{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;background:transparent;border:1.5px solid var(--line);color:var(--muted);border-radius:999px;padding:7px 13px;font-family:var(--font-heading);font-weight:700;font-size:11.5px;cursor:pointer;animation:subIn .35s var(--ease) both;transition:all .2s var(--ease);}
+  .subchip em{font-style:normal;font-size:10px;opacity:.65;font-weight:600;}
+  .subchip:active{transform:scale(.93);}
+  .subchip.active{color:#fff;border-color:var(--blue);background:rgba(59,140,255,.16);box-shadow:0 0 14px rgba(59,140,255,.35);}
+  @keyframes subIn{from{opacity:0;transform:translateX(-8px);}to{opacity:1;transform:translateX(0);}}
+  .crumbs{padding:0 18px 4px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-dim);font-weight:700;}
+  .crumbs b{color:var(--accent);}
+  /* ---------- оформление: самовывоз / доставка ---------- */
+  .seg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px;}
+  .seg-btn{padding:12px 8px;border:1.5px solid var(--line);background:var(--bg);color:var(--muted);font-family:var(--font-heading);font-weight:800;font-size:12px;border-radius:12px;cursor:pointer;transition:all .2s var(--ease);line-height:1.3;}
+  .seg-btn small{display:block;font-weight:600;font-size:10px;opacity:.8;margin-top:2px;}
+  .seg-btn:active{transform:scale(.95);}
+  .seg-btn.active{color:#fff;border-color:var(--accent);background:var(--accent-dim);box-shadow:0 0 0 3px rgba(255,138,30,.12);}
+  .co-box{animation:fadeScaleIn .3s var(--ease) both;}
+  .time-row{display:grid;grid-template-columns:1.3fr 1fr;gap:8px;}
+  .time-row .text-input{min-width:0;color-scheme:dark;}
+  .co-summary{margin-top:16px;border:1.5px dashed var(--line);border-radius:12px;padding:12px 14px;font-size:13px;}
+  .co-summary div{display:flex;justify-content:space-between;padding:3px 0;color:var(--muted);}
+  .co-summary div.tot{color:var(--text);border-top:1px solid var(--line-soft);margin-top:6px;padding-top:9px;}
+  .co-summary div.tot b{color:var(--gold);font-family:var(--font-heading);font-size:17px;}
+  .order-dlv{font-size:12px;color:var(--muted);line-height:1.7;margin:2px 0 8px;}
 </style>
 </head>
 <body>
@@ -554,6 +580,7 @@
       </div>
     </div>
   </div>
+  <div class="subfilters" id="subFilters"></div>
   <div id="gridWrap">
     <div class="skeleton-grid" id="skeletonGrid"></div>
     <div class="grid" id="grid" style="display:none;"></div>
@@ -679,7 +706,7 @@
   </div>
   <div class="sheet-inner">
     <div class="pd-name" style="margin-top:4px;">Оформление заказа</div>
-    <div class="test-badge">Оставьте контакты — менеджер свяжется и подтвердит заказ. Самовывоз: Пролетарская, Девяткино, Мурино. Доставка — 200 ₽.</div>
+    <div class="test-badge">Выберите самовывоз или доставку и удобное время — менеджер свяжется и подтвердит заказ.</div>
 
     <div class="label" style="margin-top:18px;">Имя</div>
     <input type="text" id="coName" class="text-input" placeholder="Как к вам обращаться">
@@ -687,8 +714,39 @@
     <div class="label" style="margin-top:15px;">Телефон</div>
     <input type="tel" id="coPhone" class="text-input" placeholder="+7 900 000-00-00">
 
+    <div class="label" style="margin-top:18px;">Как получить заказ</div>
+    <div class="seg" id="coMode">
+      <button type="button" class="seg-btn active" data-mode="pickup">📍 Самовывоз<small>бесплатно</small></button>
+      <button type="button" class="seg-btn" data-mode="delivery">🚚 Доставка<small id="coFeeLabel">+200 ₽</small></button>
+    </div>
+
+    <div class="co-box" id="coPickupBox">
+      <div class="label" style="margin-top:14px;">Пункт самовывоза</div>
+      <div class="sizes" id="coPoints" style="margin-bottom:6px;"></div>
+    </div>
+    <div class="co-box" id="coDeliveryBox" style="display:none;">
+      <div class="label" style="margin-top:14px;">Адрес доставки</div>
+      <textarea id="coAddress" class="text-input" style="min-height:64px;" placeholder="Улица, дом, подъезд, этаж, квартира"></textarea>
+    </div>
+
+    <div class="label" style="margin-top:15px;">Когда удобно</div>
+    <div class="seg" id="coWhen">
+      <button type="button" class="seg-btn active" data-when="asap">⚡ Как можно скорее</button>
+      <button type="button" class="seg-btn" data-when="time">🕒 Выбрать время</button>
+    </div>
+    <div class="co-box time-row" id="coTimeBox" style="display:none;margin-top:8px;">
+      <input type="date" id="coDate" class="text-input">
+      <input type="time" id="coTime" class="text-input">
+    </div>
+
     <div class="label" style="margin-top:15px;">Комментарий к заказу</div>
-    <textarea id="coComment" class="text-input" placeholder="Самовывоз или доставка, адрес, удобное время (необязательно)"></textarea>
+    <textarea id="coComment" class="text-input" placeholder="Вкус, цвет, пожелания (необязательно)"></textarea>
+
+    <div class="co-summary" id="coSummary">
+      <div><span>Товары</span><span id="coSumGoods">0 ₽</span></div>
+      <div id="coSumDlvRow" style="display:none;"><span>Доставка</span><span id="coSumDlv">0 ₽</span></div>
+      <div class="tot"><span>Итого</span><b id="coSumTotal">0 ₽</b></div>
+    </div>
 
     <div class="form-error" id="coError"></div>
 
@@ -770,6 +828,8 @@ const SWATCHES = [
   'radial-gradient(circle at 75% 15%,rgba(255,255,255,.16),transparent 45%),linear-gradient(155deg,#1F6E34,#08190D 92%)',
   'radial-gradient(circle at 75% 15%,rgba(255,255,255,.16),transparent 45%),linear-gradient(155deg,#B8860B,#241A00 92%)'
 ];
+let DELIVERY_FEE = 200;
+let PICKUP_POINTS = ['Пролетарская','Девяткино','Мурино'];
 let SHOP_CONTACT = 'SHvape_manager'; // Telegram-аккаунт менеджера (без @); сервер может переопределить через SHOP_CONTACT
 const fmt = n => n.toLocaleString('ru-RU') + ' ₽';
 const BADGE_LABELS = { hit:'Хит', trend:'В тренде', sale:'Скидка', instock:'В наличии' };
@@ -786,6 +846,7 @@ let cart = [];
 let appliedPromo = null; // { code, type, value }
 let promoFormOpen = false;
 let activeCategory = 'Все';
+let activeSub = 'Все';
 let currentProduct = null;
 let sortMode = 'default';
 
@@ -879,15 +940,48 @@ function renderTicker(){
   t.innerHTML = `<div class="ticker-half">${row}</div><div class="ticker-half">${row}</div>`;
 }
 
+function subsFor(cat){
+  if (cat === 'Все') return [];
+  const inCat = PRODUCTS.filter(p => p.category === cat);
+  const named = [...new Set(inCat.map(p => p.subcategory).filter(Boolean))];
+  if (!named.length) return [];
+  if (inCat.some(p => !p.subcategory) && !named.includes('Другие')) named.push('Другие');
+  return named;
+}
+function inSub(p, sub){
+  if (sub === 'Все') return true;
+  return (p.subcategory || 'Другие') === sub;
+}
+function renderSubFilters(){
+  const el = document.getElementById('subFilters');
+  const subs = subsFor(activeCategory);
+  if (!subs.length){ el.innerHTML = ''; return; }
+  const cnt = s => PRODUCTS.filter(p => p.category === activeCategory && inSub(p, s)).length;
+  const all = PRODUCTS.filter(p => p.category === activeCategory).length;
+  el.innerHTML = ['Все', ...subs].map((s,i) =>
+    `<button class="subchip ${s===activeSub?'active':''}" data-sub="${s}" style="animation-delay:${i*35}ms">${s==='Все'?'Все':s}<em>${s==='Все'?all:cnt(s)}</em></button>`
+  ).join('');
+  el.querySelectorAll('.subchip').forEach(b => {
+    b.onclick = () => {
+      if (b.dataset.sub === activeSub) return;
+      activeSub = b.dataset.sub;
+      renderSubFilters();
+      renderGrid();
+    };
+  });
+}
+
 function renderFilters(){
   const cats = ['Все', ...new Set(PRODUCTS.map(p => p.category))];
   filtersEl.innerHTML = cats.map(c =>
     `<button class="chip ${c===activeCategory?'active':''}" data-cat="${c}">${c}</button>`
   ).join('');
+  renderSubFilters();
   filtersEl.querySelectorAll('.chip').forEach(btn=>{
     btn.onclick = () => {
       if (btn.dataset.cat === activeCategory) return;
       activeCategory = btn.dataset.cat;
+      activeSub = 'Все';
       renderFilters();
       renderGrid();
     };
@@ -920,7 +1014,7 @@ function cardHTML(p, i){
           <button class="card-arrow card-arrow-r" data-id="${p.id}" data-dir="1" aria-label="Следующее фото">›</button>
           <div class="card-dots">${imgs.map((_,di)=>`<div class="card-dot ${di===0?'active':''}"></div>`).join('')}</div>
         ` : ''}
-        <div class="card-label">${p.category}</div>
+        <div class="card-label">${p.category}${p.subcategory ? ' · ' + p.subcategory : ''}</div>
       </div>
       <div class="card-name">${p.name}</div>
       <div class="card-price">${priceHTML(p)}</div>
@@ -982,7 +1076,7 @@ sortMenu.querySelectorAll('.sort-opt').forEach(opt=>{
 });
 
 function renderGrid(){
-  let list = activeCategory==='Все' ? PRODUCTS : PRODUCTS.filter(p=>p.category===activeCategory);
+  let list = activeCategory==='Все' ? PRODUCTS : PRODUCTS.filter(p=>p.category===activeCategory && inSub(p, activeSub));
   list = applySort(list);
   grid.style.opacity = '0';
   grid.style.transform = 'translateY(6px)';
@@ -1098,7 +1192,7 @@ function openProduct(id){
   currentProduct = PRODUCTS.find(p=>p.id===id);
   const p = currentProduct;
   renderGallery(p);
-  document.getElementById('pdCat').textContent = p.category;
+  document.getElementById('pdCat').textContent = p.category + (p.subcategory ? ' › ' + p.subcategory : '');
   const pdBadge = document.getElementById('pdBadge');
   if (p.badge && BADGE_LABELS[p.badge]){
     pdBadge.textContent = BADGE_LABELS[p.badge];
@@ -1294,6 +1388,7 @@ function updateCartTotals(){
   document.getElementById('cartDiscountRow').style.display = discount > 0 ? 'flex' : 'none';
   document.getElementById('cartDiscount').textContent = '−' + fmt(discount);
   document.getElementById('cartTotal').textContent = fmt(total);
+  if (typeof coState !== 'undefined' && coState && document.getElementById('coSumTotal')) updateCheckoutSummary();
 
   const toggle = document.getElementById('promoToggle');
   const form = document.getElementById('promoForm');
@@ -1448,6 +1543,8 @@ function renderOrders(orders){
           <div class="order-status status-${o.status}">${ORDER_STATUS_LABEL[o.status] || o.status}</div>
         </div>
         <div class="order-items">${itemsText}</div>
+        ${o.delivery ? `<div class="order-dlv">${deliveryLine(o.delivery)}</div>` : ''}
+        ${o.delivery && o.delivery.fee ? `<div class="order-total" style="font-size:11px;color:var(--muted);padding:0;"><span>Доставка</span><span>${fmt(o.delivery.fee)}</span></div>` : ''}
         ${o.discount > 0 ? `<div class="order-total" style="font-size:11px;color:var(--muted);padding:0;"><span>Промокод ${o.promo_code||''}</span><span>−${fmt(o.discount)}</span></div>` : ''}
         <div class="order-total"><span>Итого</span><b>${fmt(o.total)}</b></div>
         ${canCancel ? `<button class="order-cancel-btn" data-oid="${o.id}">Отменить заказ</button>` : ''}
@@ -1561,9 +1658,63 @@ async function submitQuestion(){
 }
 document.getElementById('qSubmitBtn').onclick = submitQuestion;
 
+
+// --- Оформление: самовывоз / доставка / время ---
+var coState = { mode:'pickup', point:null, when:'asap' };
+
+function pad2(n){ return String(n).padStart(2,'0'); }
+function todayStr(){ const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+
+function checkoutTotal(){
+  const subtotal = cartSubtotal();
+  const discount = appliedPromo ? computePromoDiscount(appliedPromo, subtotal) : 0;
+  const fee = coState.mode === 'delivery' ? DELIVERY_FEE : 0;
+  return { subtotal, discount, fee, total: subtotal - discount + fee };
+}
+
+function updateCheckoutSummary(){
+  const s = checkoutTotal();
+  document.getElementById('coSumGoods').textContent = fmt(s.subtotal - s.discount);
+  document.getElementById('coSumDlvRow').style.display = s.fee ? 'flex' : 'none';
+  document.getElementById('coSumDlv').textContent = fmt(s.fee);
+  document.getElementById('coSumTotal').textContent = fmt(s.total);
+}
+
+function renderCheckoutOpts(){
+  if (!coState.point || !PICKUP_POINTS.includes(coState.point)) coState.point = PICKUP_POINTS[0];
+  document.getElementById('coFeeLabel').textContent = DELIVERY_FEE ? '+' + fmt(DELIVERY_FEE) : 'бесплатно';
+  const box = document.getElementById('coPoints');
+  box.innerHTML = PICKUP_POINTS.map(p => `<button type="button" class="size-btn ${p===coState.point?'active':''}" data-point="${p}">${p}</button>`).join('');
+  box.querySelectorAll('.size-btn').forEach(b => b.onclick = () => { coState.point = b.dataset.point; renderCheckoutOpts(); });
+  document.getElementById('coPickupBox').style.display = coState.mode === 'pickup' ? '' : 'none';
+  document.getElementById('coDeliveryBox').style.display = coState.mode === 'delivery' ? '' : 'none';
+  document.getElementById('coTimeBox').style.display = coState.when === 'time' ? '' : 'none';
+  document.querySelectorAll('#coMode .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === coState.mode));
+  document.querySelectorAll('#coWhen .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.when === coState.when));
+  const dateEl = document.getElementById('coDate');
+  dateEl.min = todayStr();
+  if (!dateEl.value) dateEl.value = todayStr();
+  updateCheckoutSummary();
+}
+document.querySelectorAll('#coMode .seg-btn').forEach(b => b.onclick = () => { coState.mode = b.dataset.mode; renderCheckoutOpts(); });
+document.querySelectorAll('#coWhen .seg-btn').forEach(b => b.onclick = () => { coState.when = b.dataset.when; renderCheckoutOpts(); });
+renderCheckoutOpts();
+
+function deliveryLine(d){
+  if (!d) return '';
+  const place = d.mode === 'delivery' ? `🚚 Доставка: ${d.address||'—'}` : `📍 Самовывоз: ${d.point||'—'}`;
+  let when = '⚡ Как можно скорее';
+  if (!d.asap && d.date){
+    const [y,m,dd] = d.date.split('-');
+    when = `🕒 ${dd}.${m} в ${d.time||''}`;
+  }
+  return `${place}<br>${when}`;
+}
+
 document.getElementById('checkoutBtn').onclick = () => {
   if (cart.length===0) return;
   document.getElementById('coError').textContent = '';
+  renderCheckoutOpts();
   openSheet('checkoutSheet');
 };
 
@@ -1589,6 +1740,23 @@ async function submitOrder(){
     return;
   }
 
+  const addrEl = document.getElementById('coAddress');
+  const dateEl = document.getElementById('coDate');
+  const timeEl = document.getElementById('coTime');
+  [addrEl, dateEl, timeEl].forEach(e => e.classList.remove('err'));
+  const fail = (msg, el) => {
+    errEl.textContent = msg;
+    if (el) el.classList.add('err');
+    if (tg) tg.HapticFeedback?.notificationOccurred('error');
+  };
+  if (coState.mode === 'delivery' && addrEl.value.trim().length < 5){
+    return fail('Укажите адрес доставки', addrEl);
+  }
+  if (coState.when === 'time'){
+    if (!dateEl.value || !timeEl.value) return fail('Выберите дату и время', !timeEl.value ? timeEl : dateEl);
+    if (new Date(`${dateEl.value}T${timeEl.value}`) < new Date(Date.now() - 60000)) return fail('Это время уже прошло — выберите другое', timeEl);
+  }
+
   const btn = document.getElementById('coSubmitBtn');
   btn.disabled = true;
   btn.textContent = 'Отправка...';
@@ -1599,7 +1767,15 @@ async function submitOrder(){
   const payload = {
     name, phone, comment,
     items: cart.map(i => ({ id: i.id, name: i.name, size: i.size, qty: i.qty, price: i.price })),
-    total: subtotal - discount,
+    total: checkoutTotal().total,
+    delivery: {
+      mode: coState.mode,
+      point: coState.mode === 'pickup' ? coState.point : null,
+      address: coState.mode === 'delivery' ? addrEl.value.trim() : null,
+      asap: coState.when === 'asap',
+      date: coState.when === 'time' ? dateEl.value : null,
+      time: coState.when === 'time' ? timeEl.value : null,
+    },
     promo_code: appliedPromo ? appliedPromo.code : undefined,
     tg_user: tgUser ? { id: tgUser.id, username: tgUser.username } : null,
   };
@@ -1622,6 +1798,8 @@ async function submitOrder(){
     document.getElementById('coName').value = '';
     document.getElementById('coPhone').value = '';
     document.getElementById('coComment').value = '';
+    addrEl.value = ''; timeEl.value = '';
+    coState.when = 'asap'; coState.mode = 'pickup'; renderCheckoutOpts();
     openSheet('successSheet');
     showToast('Заказ отправлен на обработку', 'success');
     if (tg) tg.HapticFeedback?.notificationOccurred('success');
@@ -1695,6 +1873,9 @@ footContact.textContent = '@' + SHOP_CONTACT;
 footContact.onclick = openContact;
 fetch('/api/config').then(r => r.ok ? r.json() : null).then(c => {
   if (c && c.contact){ SHOP_CONTACT = c.contact; footContact.textContent = '@' + SHOP_CONTACT; }
+  if (c && Number.isFinite(c.delivery_fee)) DELIVERY_FEE = c.delivery_fee;
+  if (c && Array.isArray(c.pickup_points) && c.pickup_points.length) PICKUP_POINTS = c.pickup_points;
+  renderCheckoutOpts();
 }).catch(() => {});
 
 // --- 18+ ---

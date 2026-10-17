@@ -452,10 +452,14 @@
     <label>Название</label>
     <input type="text" id="fName" placeholder="PAFOS 20000">
 
+    <label>Подкатегория / бренд</label>
+    <input type="text" id="fSub" list="subList" placeholder="Vaporesso (необязательно)">
+    <datalist id="subList"></datalist>
+
     <div class="row">
       <div>
         <label>Категория</label>
-        <input type="text" id="fCategory" placeholder="Одноразки">
+        <input type="text" id="fCategory" placeholder="Поды">
       </div>
       <div>
         <label>Цена, ₽</label>
@@ -692,7 +696,7 @@ function renderList(){
       <div class="thumb" style="${cover ? `background-image:url('${cover}')` : `background:${SWATCHES[p.swatch % SWATCHES.length]}`}"></div>
       <div class="card-body">
         <div class="card-title">${p.name || '(без названия)'}</div>
-        <div class="card-sub">${p.category || '—'} · ${priceLineHTML(p)}${badgeTag}</div>
+        <div class="card-sub">${p.category || '—'}${p.subcategory ? ' › ' + p.subcategory : ''} · ${priceLineHTML(p)}${badgeTag}</div>
         <div class="card-sub">Вкусы / цвета: ${(p.sizes||[]).join(', ')}</div>
         <div class="card-sub">${photoCount ? `Фото: ${photoCount}` : 'Без фото'}</div>
         <div class="card-actions">
@@ -754,6 +758,7 @@ function renderOrders(){
         <span class="status-badge status-${o.status}">${statusLabel(o.status)}</span>
       </div>
       <div class="order-items">${(o.items||[]).map(i=>`${i.name} (${i.size||'—'}) × ${i.qty}`).join('<br>')}</div>
+      ${o.delivery ? `<div class="card-sub" style="color:var(--text);line-height:1.7;">${o.delivery.mode==='delivery' ? '🚚 Доставка: '+(o.delivery.address||'—')+' (+'+fmt(o.delivery.fee||0)+')' : '📍 Самовывоз: '+(o.delivery.point||'—')}<br>${o.delivery.asap ? '⚡ Как можно скорее' : '🕒 '+(o.delivery.date||'').split('-').reverse().slice(0,2).join('.')+' в '+(o.delivery.time||'')}</div>` : ''}
       ${o.discount ? `<div class="card-sub">Промокод: ${o.promo_code} (−${fmt(o.discount)}) · Сумма товаров: ${fmt(o.subtotal)}</div>` : ''}
       <div class="card-sub">Итого: ${fmt(o.total)}</div>
       <div class="order-contact">
@@ -1077,6 +1082,8 @@ function openModal(id){
   document.getElementById('modalSub').textContent = p ? p.name : 'заполните карточку товара';
   document.getElementById('fName').value = p?.name || '';
   document.getElementById('fCategory').value = p?.category || '';
+  document.getElementById('fSub').value = p?.subcategory || '';
+  document.getElementById('subList').innerHTML = [...new Set((typeof products!=='undefined'?products:[]).map(x=>x.subcategory).filter(Boolean))].map(s=>`<option value="${s}">`).join('');
   document.getElementById('fPrice').value = p?.price || '';
   document.getElementById('fOldPrice').value = p?.old_price || '';
   document.getElementById('fSizes').value = (p?.sizes||[]).join(', ');
@@ -1174,7 +1181,7 @@ document.getElementById('saveBtn').onclick = async () => {
     return;
   }
 
-  const payload = { name, category, price, old_price: oldPrice, badge: selectedBadge, sizes, desc, swatch: selectedSwatch, images: uploadedImages };
+  const payload = { name, category, subcategory: document.getElementById('fSub').value.trim(), price, old_price: oldPrice, badge: selectedBadge, sizes, desc, swatch: selectedSwatch, images: uploadedImages };
   const btn = document.getElementById('saveBtn');
   btn.disabled = true;
   try {

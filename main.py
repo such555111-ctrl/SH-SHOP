@@ -42,6 +42,15 @@ PROMOS_FILE = os.path.join(APP_DIR, "promos.json")
 UPLOAD_DIR = os.path.join(APP_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# Доставка и самовывоз
+try:
+    DELIVERY_FEE = int(os.environ.get("DELIVERY_FEE", "200"))
+except ValueError:
+    DELIVERY_FEE = 200
+PICKUP_POINTS = [
+    p.strip() for p in (os.environ.get("PICKUP_POINTS") or "Пролетарская,Девяткино,Мурино").split(",") if p.strip()
+]
+
 ALLOWED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 ALLOWED_BADGES = {"hit", "trend", "sale", "instock"}
 ALLOWED_PROMO_TYPES = {"percent", "fixed"}
@@ -263,12 +272,64 @@ def index():
 
 @app.route("/api/config", methods=["GET"])
 def public_config():
-    return jsonify({"contact": SHOP_CONTACT})
+    return jsonify({"contact": SHOP_CONTACT, "delivery_fee": DELIVERY_FEE, "pickup_points": PICKUP_POINTS})
 
 
 @app.route("/products.json", methods=["GET"])
 def products():
     return send_from_directory(APP_DIR, "products.json")
+
+
+def parse_delivery(raw):
+    """Проверяет блок доставки из заказа и возвращает (delivery, error)."""
+    raw = raw if isinstance(raw, dict) else {}
+    mode = raw.get("mode")
+    if mode not in ("pickup", "delivery"):
+        return None, "Выберите самовывоз или доставку"
+
+    d = {"mode": mode, "point": None, "address": None, "asap": True, "date": None, "time": None, "fee": 0}
+    if mode == "pickup":
+        point = (raw.get("point") or "").strip()
+        if point not in PICKUP_POINTS:
+            return None, "Выберите пункт самовывоза"
+        d["point"] = point
+    else:
+        address = (raw.get("address") or "").strip()
+        if len(address) < 5:
+            return None, "Укажите адрес доставки"
+        d["address"] = address[:300]
+        d["fee"] = DELIVERY_FEE
+
+    if not raw.get("asap", True):
+        date_s = (raw.get("date") or "").strip()
+        time_s = (raw.get("time") or "").strip()
+        try:
+            datetime.strptime(date_s, "%Y-%m-%d")
+            datetime.strptime(time_s, "%H:%M")
+        except ValueError:
+            return None, "Укажите дату и время"
+        d["asap"] = False
+        d["date"] = date_s
+        d["time"] = time_s
+    return d, None
+
+
+def delivery_text(d):
+    if not isinstance(d, dict) or not d:
+        return ""
+    if d.get("mode") == "delivery":
+        line = f"🚚 Доставка ({fmt_price(d.get('fee') or 0)}): {d.get('address') or '—'}"
+    else:
+        line = f"📍 Самовывоз: {d.get('point') or '—'}"
+    if d.get("asap", True):
+        when = "⚡ Как можно скорее"
+    else:
+        try:
+            day = datetime.strptime(d.get("date", ""), "%Y-%m-%d").strftime("%d.%m")
+        except ValueError:
+            day = d.get("date") or ""
+        when = f"🕒 {day} в {d.get('time') or ''}"
+    return line + "\n" + when
 
 
 @app.route("/api/order", methods=["POST"])
@@ -284,6 +345,10 @@ def create_order():
         abort(400, description="Укажите имя и телефон")
     if not isinstance(items, list) or not items:
         abort(400, description="Корзина пуста")
+
+    delivery, delivery_err = parse_delivery(data.get("delivery"))
+    if delivery_err:
+        abort(400, description=delivery_err)
 
     subtotal = sum(int(i.get("price") or 0) * int(i.get("qty") or 1) for i in items)
 
@@ -304,7 +369,7 @@ def create_order():
             abort(400, description=promo_err)
         discount = compute_promo_discount(promo, subtotal)
 
-    total = subtotal - discount
+    total = subtotal - discount + delivery["fee"]
 
     orders = load_orders()
     new_id = (max([o.get("id", 0) for o in orders], default=0) + 1)
@@ -318,6 +383,7 @@ def create_order():
         "subtotal": subtotal,
         "discount": discount,
         "promo_code": promo.get("code") if promo else None,
+        "delivery": delivery,
         "total": total,
         "customer_chat_id": customer_chat_id,
         "customer_username": customer_username,
@@ -339,6 +405,9 @@ def create_order():
         for i in items
     )
 
+    delivery_block = delivery_text(delivery)
+    fee_line = f"Доставка: {fmt_price(delivery['fee'])}\n" if delivery["fee"] else ""
+
     discount_line = ""
     if discount > 0:
         discount_line = (
@@ -353,10 +422,11 @@ def create_order():
                 "✅ Заказ оформлен!\n\n"
                 f"Номер заказа: SH-{new_id}\n"
                 f"{items_lines}\n\n"
+                f"{delivery_block}\n\n"
                 f"{discount_line}"
+                f"{fee_line}"
                 f"Итого: {fmt_price(total)}\n\n"
-                "Мы свяжемся с вами в этом чате, чтобы подтвердить заказ и "
-                "обсудить доставку."
+                "Мы свяжемся с вами в этом чате, чтобы подтвердить заказ и время."
             )
         except Exception as e:
             log.warning("Не удалось отправить подтверждение покупателю: %s", e)
@@ -367,11 +437,13 @@ def create_order():
         f"Телефон: {phone}\n"
         + (f"Telegram: @{customer_username}\n" if customer_username else "")
         + f"\n{items_lines}\n\n"
+        f"{delivery_block}\n\n"
         f"{discount_line}"
+        f"{fee_line}"
         f"Итого: {fmt_price(total)}\n"
         + (f"\nКомментарий: {comment}\n" if comment else "")
         + "\nОткройте панель администратора (вкладка «Заказы»), чтобы "
-          "написать клиенту и обсудить доставку."
+          "написать клиенту и подтвердить время."
     )
     for admin_id in ADMIN_CHAT_IDS:
         try:
@@ -568,6 +640,7 @@ def admin_create_product():
         "id": new_id,
         "name": (data.get("name") or "").strip(),
         "category": (data.get("category") or "").strip(),
+        "subcategory": (data.get("subcategory") or "").strip(),
         "price": price,
         "old_price": sanitize_old_price(data.get("old_price")),
         "badge": sanitize_badge(data.get("badge")),
@@ -593,6 +666,8 @@ def admin_update_product(pid):
                 p["name"] = (data.get("name") or "").strip()
             if "category" in data:
                 p["category"] = (data.get("category") or "").strip()
+            if "subcategory" in data:
+                p["subcategory"] = (data.get("subcategory") or "").strip()
             if "price" in data:
                 try:
                     p["price"] = int(float(data.get("price") or 0))
