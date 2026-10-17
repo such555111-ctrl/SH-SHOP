@@ -697,8 +697,37 @@
   .cat-reset:active{transform:scale(.94);}
   .cat-reset:hover{color:var(--text);border-color:var(--accent);}
 
+
+  /* ===== навигация по уровням (как в МойСклад) ===== */
+  .cat-nav{position:relative;}
+  .nav-panel{animation:navIn .28s var(--ease) both;}
+  .nav-panel.fwd{--from:28px;}
+  .nav-panel.back{--from:-28px;}
+  @keyframes navIn{from{opacity:0;transform:translateX(var(--from,0));}to{opacity:1;transform:none;}}
+  .nav-back{
+    display:inline-flex;align-items:center;gap:4px;margin:2px 0 0;padding:14px 20px 8px 14px;
+    background:none;border:none;cursor:pointer;color:var(--accent-soft);
+    font-family:var(--font-body);font-size:15px;font-weight:600;
+  }
+  .nav-back:active{opacity:.6;}
+  .nav-all{
+    display:flex;align-items:center;gap:10px;width:calc(100% - 28px);margin:4px 14px 8px;padding:14px 16px;
+    text-align:left;cursor:pointer;color:var(--text);
+    background:linear-gradient(135deg,rgba(255,138,30,.12),rgba(255,77,31,.06));
+    border:1.5px solid rgba(255,90,31,.35);border-radius:16px;
+    transition:transform .2s var(--ease), background .2s var(--ease);
+  }
+  .nav-all:active{transform:scale(.98);}
+  .nav-all .nav-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;}
+  .nav-all b{font-family:var(--font-heading);font-weight:800;font-size:18px;line-height:1.2;}
+  .nav-all small{font-size:12.5px;color:var(--muted);}
+  .nav-all em,.cat-link .cnt{font-style:normal;font-size:11.5px;font-weight:800;border-radius:8px;padding:2px 8px;}
+  .nav-all em{color:#1A0A00;background:var(--grad);}
+  .cat-link .cnt{color:var(--muted-dim);padding:0;font-weight:600;}
+
   @media (prefers-reduced-motion:reduce){
     .sidebar-menu,.menu-overlay,.cat-sub,.burger-lines i{transition-duration:.01s;}
+    .nav-panel{animation:none;}
     .cat-badge{animation:none;}
   }
 
@@ -990,48 +1019,7 @@
   </div>
 
   <nav class="sidebar-body">
-    <ul class="cat-list" id="catList">
-
-      <li class="cat-item">
-        <button class="cat-link" type="button" data-cat="all">
-          <span class="cat-name">Все товары</span>
-        </button>
-      </li>
-
-      <li class="cat-item has-sub">
-        <button class="cat-link" type="button" data-cat="vape" aria-expanded="false">
-          <span class="cat-name">Всё для вейпа</span>
-          <svg class="cat-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
-        </button>
-        <div class="cat-sub"><ul class="sub-list" data-sub="vape"></ul></div>
-      </li>
-
-      <li class="cat-item has-sub">
-        <button class="cat-link" type="button" data-cat="chew" aria-expanded="false">
-          <span class="cat-name">Жевательный табак</span>
-          <svg class="cat-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
-        </button>
-        <div class="cat-sub"><ul class="sub-list" data-sub="chew"></ul></div>
-      </li>
-
-      <li class="cat-item has-sub">
-        <button class="cat-link" type="button" data-cat="cigs" aria-expanded="false">
-          <span class="cat-name">Импортные сигареты / сигариллы</span>
-          <svg class="cat-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
-        </button>
-        <div class="cat-sub"><ul class="sub-list" data-sub="cigs"></ul></div>
-      </li>
-
-      <li class="cat-item has-sub cat-sale">
-        <button class="cat-link" type="button" data-cat="sale" aria-expanded="false">
-          <span class="cat-name">РАСПРОДАЖА</span>
-          <span class="cat-badge">HOT</span>
-          <svg class="cat-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
-        </button>
-        <div class="cat-sub"><ul class="sub-list" data-sub="sale"></ul></div>
-      </li>
-
-    </ul>
+    <div class="cat-nav" id="catList"></div>
 
     <!-- сюда JS может подгружать дополнительные блоки -->
     <div class="menu-dynamic" id="menuDynamic"></div>
@@ -2910,7 +2898,7 @@ function menuPass(p){ return !menuFilter || menuFilter.test(p); }
   /* ---------- открытие / закрытие ---------- */
   function openMenu(){
     if (isOpen()) return;
-    buildMenu();
+    navTree = buildTree(); navPath = []; navDir = ''; renderNav();
     lastFocus = document.activeElement;
     if (typeof searchInput !== 'undefined') searchInput.blur();
     sidebar.classList.add('active');
@@ -2918,7 +2906,7 @@ function menuPass(p){ return !menuFilter || menuFilter.test(p); }
     document.body.classList.add('menu-open');
     sidebar.setAttribute('aria-hidden', 'false');
     burger.setAttribute('aria-expanded', 'true');
-    try { tg?.BackButton.show(); tg?.BackButton.onClick(closeMenu); } catch(e){}
+    try { tg?.BackButton.show(); tg?.BackButton.onClick(navBack); } catch(e){}
     setTimeout(() => closeBtn.focus({ preventScroll:true }), 50);
   }
   function closeMenu(){
@@ -2928,14 +2916,14 @@ function menuPass(p){ return !menuFilter || menuFilter.test(p); }
     document.body.classList.remove('menu-open');
     sidebar.setAttribute('aria-hidden', 'true');
     burger.setAttribute('aria-expanded', 'false');
-    try { tg?.BackButton.offClick(closeMenu); tg?.BackButton.hide(); } catch(e){}
+    try { tg?.BackButton.offClick(navBack); tg?.BackButton.hide(); } catch(e){}
     if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll:true });
   }
 
   burger.addEventListener('click', () => isOpen() ? closeMenu() : openMenu());
   closeBtn.addEventListener('click', closeMenu);
   overlay.addEventListener('click', closeMenu);
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && isOpen()) closeMenu(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && isOpen()) navBack(); });
   overlay.addEventListener('touchmove', e => e.preventDefault(), { passive:false });
 
   let sx = 0, sy = 0;
@@ -2945,53 +2933,75 @@ function menuPass(p){ return !menuFilter || menuFilter.test(p); }
     if (dx < -70 && Math.abs(dx) > Math.abs(dy) * 1.5) closeMenu();
   }, { passive:true });
 
-  /* ---------- наполнение меню ---------- */
-  const itemOf = key => catList.querySelector(`.cat-link[data-cat="${key}"]`)?.closest('.cat-item');
+  /* ---------- навигация по уровням: раздел → категория → бренд ---------- */
+  const CHEV_R = '<svg class="cat-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>';
+  const CHEV_L = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>';
+  let navTree = [], navPath = [], navDir = '';
 
-  function buildMenu(){
+  function brandNodes(key, cat){
+    return subsFor(cat).map(b => ({
+      label:b, key, cat, brand:b, kids:[],
+      count: PRODUCTS.filter(p => p.category === cat && inSub(p, b)).length
+    }));
+  }
+  function buildTree(){
+    const root = [];
     for (const [key, def] of Object.entries(MENU_MAP)){
-      const item = itemOf(key);
-      if (!item) continue;
-      const subEl = item.querySelector('.sub-list');
+      if (key === 'all') continue;
       const cats  = (def.cats || []).filter(c => PRODUCTS.some(p => p.category === c));
-      const multi = cats.length > 1;
-      item.dataset.expandable = multi ? '1' : '';
-      if (!subEl) continue;
-      if (!multi){ subEl.innerHTML = ''; continue; }
-      const total = PRODUCTS.filter(p => cats.includes(p.category)).length;
-      subEl.innerHTML =
-        `<li><button class="sub-link" type="button" data-cat="${key}" data-sub="">Всё в разделе<span class="cnt">${total}</span></button></li>` +
-        cats.map(c => {
-          const n = PRODUCTS.filter(p => p.category === c).length;
-          return `<li><button class="sub-link" type="button" data-cat="${key}" data-sub="${escHtml(c)}">${escHtml(c)}<span class="cnt">${n}</span></button></li>`;
-        }).join('');
+      const count = PRODUCTS.filter(p => def.test ? def.test(p) : cats.includes(p.category)).length;
+      let kids = [];
+      if (cats.length > 1){
+        kids = cats.map(c => ({
+          label:c, key, cat:c,
+          count: PRODUCTS.filter(p => p.category === c).length,
+          kids: brandNodes(key, c)
+        }));
+      } else if (cats.length === 1){
+        kids = brandNodes(key, cats[0]);
+      }
+      root.push({ label:def.label, key, count, kids, sale:key === 'sale' });
     }
-    markCurrent();
+    return root;
   }
 
-  function toggleAccordion(item){
-    const willOpen = !item.classList.contains('open');
-    catList.querySelectorAll('.cat-item.open').forEach(i => {
-      i.classList.remove('open');
-      i.querySelector('.cat-link')?.setAttribute('aria-expanded', 'false');
-    });
-    if (willOpen){
-      item.classList.add('open');
-      item.querySelector('.cat-link')?.setAttribute('aria-expanded', 'true');
+  const isCur = n => !!menuFilter && menuFilter.key === n.key
+    && (menuFilter.sub || null) === (n.cat || null)
+    && (menuFilter.brand || null) === (n.brand || null);
+
+  function renderNav(){
+    const node = navPath[navPath.length - 1];
+    const kids = node ? node.kids : navTree;
+    let html = '';
+    if (node){
+      html += `<button class="nav-back" type="button" data-nav="back">${CHEV_L}Назад</button>` +
+        `<button class="nav-all${isCur(node) ? ' current' : ''}" type="button" data-nav="all">` +
+          `<span class="nav-txt"><b>${escHtml(node.label)}</b><small>Все товары категории</small></span>` +
+          `<em>${node.count}</em></button>`;
     }
+    html += '<ul class="cat-list">';
+    if (!node){
+      html += `<li class="cat-item"><button class="cat-link${!menuFilter ? ' current' : ''}" type="button" data-nav="home"><span class="cat-name">Все товары</span></button></li>`;
+    }
+    html += kids.map((n, i) =>
+      `<li class="cat-item${n.sale ? ' cat-sale' : ''}"><button class="cat-link${isCur(n) && !n.kids.length ? ' current' : ''}" type="button" data-i="${i}">` +
+        `<span class="cat-name">${escHtml(n.label)}</span>` +
+        (n.sale ? '<span class="cat-badge">HOT</span>' : '') +
+        (node ? `<span class="cnt">${n.count}</span>` : '') +
+        (n.kids.length ? CHEV_R : '') +
+      `</button></li>`
+    ).join('');
+    html += '</ul>';
+    catList.innerHTML = `<div class="nav-panel ${navDir}">${html}</div>`;
+    const body = sidebar.querySelector('.sidebar-body');
+    if (body) body.scrollTop = 0;
   }
 
-  function markCurrent(){
-    catList.querySelectorAll('.cat-link.current, .sub-link.current').forEach(el => el.classList.remove('current'));
-    const key = menuFilter ? menuFilter.key : 'all';
-    const sub = menuFilter ? (menuFilter.sub || '') : '';
-    catList.querySelectorAll('.cat-link').forEach(l => {
-      if (l.dataset.cat === key && !sub && itemOf(key)?.dataset.expandable !== '1') l.classList.add('current');
-    });
-    catList.querySelectorAll('.sub-link').forEach(l => {
-      if (l.dataset.cat === key && (l.dataset.sub || '') === sub) l.classList.add('current');
-    });
+  function navBack(){
+    if (navPath.length){ navPath.pop(); navDir = 'back'; renderNav(); }
+    else closeMenu();
   }
+  function markCurrent(){ if (isOpen()){ navDir = ''; renderNav(); } }
 
   /* ---------- бейдж активной категории над товарами ---------- */
   const bar = document.createElement('div');
@@ -3010,11 +3020,13 @@ function menuPass(p){ return !menuFilter || menuFilter.test(p); }
   bar.addEventListener('click', e => { if (e.target.closest('.cat-reset')) applyMenuFilter('all'); });
 
   /* ---------- применение фильтра ---------- */
-  function applyMenuFilter(key, subCat){
+  function applyMenuFilter(key, subCat, brand){
     const def = MENU_MAP[key];
     if (!def) return;
     if (key === 'all') menuFilter = null;
-    else if (subCat)   menuFilter = { key, sub:subCat, label:`${def.label} · ${subCat}`, test:p => p.category === subCat };
+    else if (subCat)   menuFilter = { key, sub:subCat, brand:brand || null,
+                         label:[def.label, subCat, brand].filter(Boolean).join(' · '),
+                         test: brand ? (p => p.category === subCat && inSub(p, brand)) : (p => p.category === subCat) };
     else               menuFilter = { key, sub:null,   label:def.label, test:def.test || (p => def.cats.includes(p.category)) };
 
     activeCategory = 'Все'; activeSub = 'Все';
@@ -3038,17 +3050,26 @@ function menuPass(p){ return !menuFilter || menuFilter.test(p); }
 
   /* ---------- клики по пунктам меню ---------- */
   catList.addEventListener('click', e => {
-    const subBtn = e.target.closest('.sub-link');
-    if (subBtn){ pick(subBtn.dataset.cat, subBtn.dataset.sub || null); return; }
-    const link = e.target.closest('.cat-link');
-    if (!link) return;
-    const item = link.closest('.cat-item');
-    if (item.dataset.expandable === '1'){ toggleAccordion(item); return; }
-    pick(link.dataset.cat, null);
+    const b = e.target.closest('button');
+    if (!b) return;
+    const nav = b.dataset.nav;
+    if (nav === 'back'){ navBack(); return; }
+    if (nav === 'home'){ pick('all'); return; }
+    if (nav === 'all'){
+      const n = navPath[navPath.length - 1];
+      if (n) pick(n.key, n.cat || null, null);
+      return;
+    }
+    if (b.dataset.i === undefined) return;
+    const parent = navPath[navPath.length - 1];
+    const n = (parent ? parent.kids : navTree)[+b.dataset.i];
+    if (!n) return;
+    if (n.kids.length){ navPath.push(n); navDir = 'fwd'; renderNav(); }
+    else pick(n.key, n.cat || null, n.brand || null);
   });
 
-  function pick(key, subCat){
-    applyMenuFilter(key, subCat);
+  function pick(key, subCat, brand){
+    applyMenuFilter(key, subCat, brand);
     closeMenu();
     setTimeout(scrollToCatalog, 120);
   }
