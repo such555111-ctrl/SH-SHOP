@@ -486,6 +486,28 @@
   .co-summary div.tot{color:var(--text);border-top:1px solid var(--line-soft);margin-top:6px;padding-top:9px;}
   .co-summary div.tot b{color:var(--gold);font-family:var(--font-heading);font-size:17px;}
   .order-dlv{font-size:12px;color:var(--muted);line-height:1.7;margin:2px 0 8px;}
+
+  /* ---------- производительность: лёгкие версии тяжёлых эффектов ---------- */
+  body::after{display:none;}                                   /* fixed-шум с mix-blend-mode перерисовывался при каждом скролле */
+  .smoke i{filter:none;}                                       /* blur(18px) на анимированных блобах */
+  .smoke i:nth-child(n+4){display:none;}
+  header{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(7,8,15,.95);}
+  .card-like,.card-arrow{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(7,8,15,.78);}
+  .grid{transition:none;perspective:none;}
+  .card{transform-style:flat;transition:none;animation:cardIn .35s var(--ease) both;content-visibility:auto;contain-intrinsic-size:auto 300px;}
+  .card:hover{transform:none;}
+  @media (hover:hover){.card{transition:transform .25s var(--ease);}.card:hover{transform:translateY(-4px);}}
+  .card-media{transition:border-color .3s var(--ease), box-shadow .3s var(--ease), transform .2s var(--ease);}
+  .chip.active,.badge-hit,.section-title::before,.hero::before{animation:none;}
+  .hero-cta::after,.btn-primary::after{display:none;}
+  .chip{transition:background .2s var(--ease), color .2s var(--ease), border-color .2s var(--ease), transform .15s var(--ease);}
+  /* пагинация */
+  .more-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;padding:6px 18px 10px;}
+  .more-wrap[hidden]{display:none;}
+  .more-btn{background:var(--bg-elev);color:var(--text);border:1.5px solid var(--line);border-radius:var(--border-radius-btn);padding:13px 26px;font-family:var(--font-heading);font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:border-color .2s var(--ease), transform .15s var(--ease);}
+  .more-btn:hover{border-color:var(--accent);}
+  .more-btn:active{transform:scale(.96);}
+  .more-count{font-size:11px;color:var(--muted-dim);}
 </style>
 </head>
 <body>
@@ -584,6 +606,7 @@
   <div id="gridWrap">
     <div class="skeleton-grid" id="skeletonGrid"></div>
     <div class="grid" id="grid" style="display:none;"></div>
+    <div class="more-wrap" id="moreWrap" hidden></div>
   </div>
 
   <footer class="foot">
@@ -961,15 +984,14 @@ function renderSubFilters(){
   el.innerHTML = ['Все', ...subs].map((s,i) =>
     `<button class="subchip ${s===activeSub?'active':''}" data-sub="${s}" style="animation-delay:${i*35}ms">${s==='Все'?'Все':s}<em>${s==='Все'?all:cnt(s)}</em></button>`
   ).join('');
-  el.querySelectorAll('.subchip').forEach(b => {
-    b.onclick = () => {
-      if (b.dataset.sub === activeSub) return;
-      activeSub = b.dataset.sub;
-      renderSubFilters();
-      renderGrid();
-    };
-  });
 }
+document.getElementById('subFilters').addEventListener('click', (e) => {
+  const b = e.target.closest('.subchip');
+  if (!b || b.dataset.sub === activeSub) return;
+  activeSub = b.dataset.sub;
+  e.currentTarget.querySelectorAll('.subchip').forEach(x => x.classList.toggle('active', x === b));
+  renderGrid(true);
+});
 
 function renderFilters(){
   const cats = ['Все', ...new Set(PRODUCTS.map(p => p.category))];
@@ -977,16 +999,17 @@ function renderFilters(){
     `<button class="chip ${c===activeCategory?'active':''}" data-cat="${c}">${c}</button>`
   ).join('');
   renderSubFilters();
-  filtersEl.querySelectorAll('.chip').forEach(btn=>{
-    btn.onclick = () => {
-      if (btn.dataset.cat === activeCategory) return;
-      activeCategory = btn.dataset.cat;
-      activeSub = 'Все';
-      renderFilters();
-      renderGrid();
-    };
-  });
 }
+// Клик по категории: НЕ пересобираем ряд чипов (иначе он прыгает в начало), только переключаем active.
+filtersEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('.chip');
+  if (!btn || btn.dataset.cat === activeCategory) return;
+  activeCategory = btn.dataset.cat;
+  activeSub = 'Все';
+  filtersEl.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c === btn));
+  renderSubFilters();
+  renderGrid(true);
+});
 
 const emptyStateHTML = `
   <div class="empty-state">
@@ -1071,25 +1094,59 @@ sortMenu.querySelectorAll('.sort-opt').forEach(opt=>{
     sortMenu.querySelectorAll('.sort-opt').forEach(o=>o.classList.toggle('active', o===opt));
     sortBtn.classList.toggle('active', sortMode!=='default');
     sortMenu.classList.remove('open');
-    renderGrid();
+    renderGrid(true);
   };
 });
 
-function renderGrid(){
-  let list = activeCategory==='Все' ? PRODUCTS : PRODUCTS.filter(p=>p.category===activeCategory && inSub(p, activeSub));
-  list = applySort(list);
-  grid.style.opacity = '0';
-  grid.style.transform = 'translateY(6px)';
-  setTimeout(()=>{
-    if (list.length===0){
-      grid.innerHTML = emptyStateHTML;
-    } else {
-      grid.innerHTML = list.map((p,i) => cardHTML(p,i)).join('');
-      attachCardHandlers(grid);
-    }
-    grid.style.opacity = '1';
-    grid.style.transform = 'translateY(0)';
-  }, 140);
+// --- каталог с пагинацией: товары подгружаются порциями ---------------
+const PAGE_SIZE = 12;
+let currentList = [];
+let shown = 0;
+const moreWrap = document.getElementById('moreWrap');
+const moreObserver = ('IntersectionObserver' in window)
+  ? new IntersectionObserver((entries) => { if (entries[0].isIntersecting) appendPage(); }, { rootMargin: '500px 0px' })
+  : null;
+
+function renderGrid(keepViewport){
+  const list = activeCategory==='Все' ? PRODUCTS : PRODUCTS.filter(p=>p.category===activeCategory && inSub(p, activeSub));
+  currentList = applySort(list);
+  shown = 0;
+  if (moreObserver) moreObserver.disconnect();
+  if (currentList.length===0){
+    grid.innerHTML = emptyStateHTML;
+    moreWrap.hidden = true;
+    return;
+  }
+  grid.textContent = '';
+  appendPage();
+  // после смены фильтра не даём странице «прыгать»: если пользователь ушёл ниже ленты фильтров — возвращаем к ней
+  if (keepViewport){
+    const top = filtersEl.getBoundingClientRect().top + window.scrollY - 70;
+    if (window.scrollY > top) window.scrollTo({ top: Math.max(0, top), behavior: 'instant' });
+  }
+}
+
+function appendPage(){
+  if (shown >= currentList.length) return;
+  const next = currentList.slice(shown, shown + PAGE_SIZE);
+  const tpl = document.createElement('template');
+  tpl.innerHTML = next.map((p,i) => cardHTML(p,i)).join('');
+  attachCardHandlers(tpl.content);
+  grid.appendChild(tpl.content);
+  shown += next.length;
+  updateMore();
+}
+
+function updateMore(){
+  const left = currentList.length - shown;
+  if (moreObserver) moreObserver.disconnect();
+  if (left <= 0){ moreWrap.hidden = true; return; }
+  moreWrap.hidden = false;
+  moreWrap.innerHTML =
+    `<button class="more-btn" type="button">Показать ещё ${Math.min(PAGE_SIZE, left)}</button>` +
+    `<div class="more-count">Показано ${shown} из ${currentList.length}</div>`;
+  moreWrap.querySelector('.more-btn').onclick = appendPage;
+  if (moreObserver) moreObserver.observe(moreWrap);   // автоподгрузка при приближении к концу списка
 }
 
 function renderFavorites(){
@@ -1912,7 +1969,7 @@ document.addEventListener('scroll', () => {
   else header.classList.remove('scrolled');
 }, {passive:true});
 
-// --- Intersection Observer for reveal animations ---
+// --- reveal-анимация только для истории заказов (на карточках каталога она конфликтовала с cardIn и вызывала мигание) ---
 const revealObserver = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
     if (entry.isIntersecting) {
@@ -1923,51 +1980,16 @@ const revealObserver = new IntersectionObserver((entries) => {
 }, { threshold: 0.1, rootMargin: '0px 0px -20px 0px' });
 
 function observeReveals() {
-  document.querySelectorAll('.card, .order-card, .cart-row').forEach(el => {
+  document.querySelectorAll('.order-card:not(.reveal)').forEach(el => {
     el.classList.add('reveal');
     revealObserver.observe(el);
   });
 }
 
-// --- Enhanced card tilt effect on mouse move (desktop) ---
-function initTiltEffect() {
-  if (window.matchMedia('(pointer: coarse)').matches) return;
-  document.querySelectorAll('.card').forEach(card => {
-    card.addEventListener('mousemove', (e) => {
-      const rect = card.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
-      const rotateX = (y - centerY) / 34;
-      const rotateY = (centerX - x) / 34;
-      card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-4px)`;
-    });
-    card.addEventListener('mouseleave', () => {
-      card.style.transform = '';
-    });
-  });
-}
-
-// Override renderGrid to add reveals and tilt
-const originalRenderGrid = renderGrid;
-renderGrid = function() {
-  originalRenderGrid();
-  setTimeout(() => { observeReveals(); initTiltEffect(); }, 200);
-};
-
-// Override renderFavorites to add reveals
-const originalRenderFavs = renderFavorites;
-renderFavorites = function() {
-  originalRenderFavs();
-  setTimeout(() => { observeReveals(); initTiltEffect(); }, 200);
-};
-
-// Override renderOrders to add reveals
 const originalRenderOrders = renderOrders;
 renderOrders = function(orders) {
   originalRenderOrders(orders);
-  setTimeout(() => { observeReveals(); }, 200);
+  requestAnimationFrame(observeReveals);
 };
 
 // --- Magnetic button effect for icon buttons ---

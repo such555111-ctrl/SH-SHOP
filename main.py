@@ -277,7 +277,9 @@ def public_config():
 
 @app.route("/products.json", methods=["GET"])
 def products():
-    return send_from_directory(APP_DIR, "products.json")
+    # короткий кэш + ETag: повторные открытия не качают файл заново
+    resp = send_from_directory(APP_DIR, "products.json", max_age=30)
+    return resp
 
 
 def parse_delivery(raw):
@@ -596,7 +598,8 @@ def create_question():
 
 @app.route("/uploads/<path:filename>", methods=["GET"])
 def uploaded_file(filename):
-    return send_from_directory(UPLOAD_DIR, filename)
+    # имена файлов — uuid, содержимое не меняется, можно кэшировать надолго
+    return send_from_directory(UPLOAD_DIR, filename, max_age=60 * 60 * 24 * 30)
 
 
 @app.route("/admin", methods=["GET"])
