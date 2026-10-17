@@ -188,8 +188,25 @@ class LoyaltyUser(Base):
                             default=lambda: datetime.now(timezone.utc))
 
 
+class LoyaltyTransaction(Base):
+    """Журнал всех движений баллов (списание, кешбэк, откаты) — история хранится в базе навсегда."""
+    __tablename__ = "loyalty_transactions"
+    id            = Column(Integer, primary_key=True)
+    telegram_id   = Column(BigInteger, nullable=False, index=True)
+    order_id      = Column(Integer, index=True)
+    kind          = Column(String(16), nullable=False)    # spend | earn | revert_spend | revert_earn
+    points        = Column(Integer, nullable=False)        # со знаком: + начислено, − списано
+    balance_after = Column(Integer, nullable=False)
+    created_at    = Column(DateTime(timezone=True), nullable=False,
+                           default=lambda: datetime.now(timezone.utc))
+
+
 # Отдельная фабрика сессий для данных магазина (не мешает сессиям отзывов).
 DocSession = sessionmaker(bind=engine, expire_on_commit=False)
+
+if DATABASE_URL.startswith("sqlite"):
+    log.warning("DATABASE_URL не задан: используется локальный SQLite, на Render он стирается при "
+                "каждом перезапуске — баллы пропадут. Укажите DATABASE_URL (Neon).")
 
 try:
     Base.metadata.create_all(engine)       # создаст все таблицы, если их ещё нет
@@ -225,7 +242,20 @@ def loyalty_get(tg_id):
             raise
 
 
-def loyalty_apply(tg_id, spend, earn, paid):
+def _log_points(db, tg_id, order_id, spend, earn, balance, revert=False):
+    """Добавляет записи в журнал в той же транзакции, что и изменение баланса."""
+    pre = "revert_" if revert else ""
+    # при откате списанные баллы возвращаются (+), а начисленный кешбэк забирается (−)
+    s_delta, e_delta = (spend, -earn) if revert else (-spend, earn)
+    if spend:
+        db.add(LoyaltyTransaction(telegram_id=tg_id, order_id=order_id, kind=pre + "spend",
+                                  points=s_delta, balance_after=balance))
+    if earn:
+        db.add(LoyaltyTransaction(telegram_id=tg_id, order_id=order_id, kind=pre + "earn",
+                                  points=e_delta, balance_after=balance))
+
+
+def loyalty_apply(tg_id, spend, earn, paid, order_id=None):
     """Списывает spend баллов, начисляет earn баллов, добавляет paid к total_spent — одной транзакцией.
     Бросает ValueError, если на балансе не хватает баллов. Возвращает новый баланс."""
     with DocSession() as db:
@@ -235,6 +265,7 @@ def loyalty_apply(tg_id, spend, earn, paid):
                 raise ValueError("not enough points")
             user.points_balance = user.points_balance - spend + earn
             user.total_spent = float(user.total_spent or 0) + paid
+            _log_points(db, tg_id, order_id, spend, earn, user.points_balance)
             db.commit()
             return user.points_balance
         except Exception:
@@ -242,13 +273,14 @@ def loyalty_apply(tg_id, spend, earn, paid):
             raise
 
 
-def loyalty_revert(tg_id, spend, earn, paid):
+def loyalty_revert(tg_id, spend, earn, paid, order_id=None):
     """Обратная операция при отмене заказа: возвращает списанные баллы, забирает начисленный кешбэк."""
     with DocSession() as db:
         try:
             user = _get_or_create_loyalty(db, tg_id, lock=True)
             user.points_balance = max(0, user.points_balance + spend - earn)
             user.total_spent = max(0.0, float(user.total_spent or 0) - paid)
+            _log_points(db, tg_id, order_id, spend, earn, user.points_balance, revert=True)
             db.commit()
             return user.points_balance
         except Exception:
@@ -1037,10 +1069,13 @@ def create_order():
     if stock_err:
         abort(400, description=stock_err)
 
+    orders = load_orders()
+    new_id = (max([o.get("id", 0) for o in orders], default=0) + 1)
+
     new_balance = None
     if customer_chat_id:
         try:
-            new_balance = loyalty_apply(customer_chat_id, points_to_spend, cashback, total)
+            new_balance = loyalty_apply(customer_chat_id, points_to_spend, cashback, total, order_id=new_id)
         except ValueError:
             shift_stock(items, +1)           # вернуть только что списанные остатки
             abort(400, description="Недостаточно баллов на балансе")
@@ -1049,8 +1084,6 @@ def create_order():
             log.exception("Не удалось обновить баланс баллов")
             return jsonify({"error": "Не удалось списать баллы, попробуйте ещё раз"}), 500
 
-    orders = load_orders()
-    new_id = (max([o.get("id", 0) for o in orders], default=0) + 1)
     order = {
         "id": new_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -1213,7 +1246,7 @@ def customer_cancel_order(oid):
         shift_stock(order.get("items") or [], +1)   # отменённый заказ возвращает товар на склад
         order["stock_deducted"] = False
     if order.get("loyalty_applied"):
-        loyalty_revert(*order_loyalty_args(order))   # вернуть баллы, забрать кешбэк
+        loyalty_revert(*order_loyalty_args(order), order_id=order.get("id"))   # вернуть баллы, забрать кешбэк
         order["loyalty_applied"] = False
     save_orders(orders)
 
@@ -1574,12 +1607,12 @@ def admin_update_order_status(oid):
             # остатки следуют за статусом: отмена возвращает товар, «оживление» отменённого заказа списывает снова
             # баллы следуют за статусом так же, как остатки
             if status == "cancelled" and prev != "cancelled" and o.get("loyalty_applied"):
-                loyalty_revert(*order_loyalty_args(o))
+                loyalty_revert(*order_loyalty_args(o), order_id=o.get("id"))
                 o["loyalty_applied"] = False
             elif (prev == "cancelled" and status != "cancelled" and o.get("customer_chat_id")
                   and o.get("loyalty_applied") is False):
                 try:
-                    loyalty_apply(*order_loyalty_args(o))
+                    loyalty_apply(*order_loyalty_args(o), order_id=o.get("id"))
                 except ValueError:
                     abort(400, description="У клиента не хватает баллов, чтобы возобновить заказ")
                 o["loyalty_applied"] = True
