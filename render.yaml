@@ -14,6 +14,8 @@ services:
         sync: false
       - key: ADMIN_CHAT_ID
         sync: false
+      - key: DATABASE_URL
+        sync: false
       - key: SHOP_CONTACT
         value: SHvape_manager
     # Опционально: платный постоянный диск, чтобы товары и загруженные фото

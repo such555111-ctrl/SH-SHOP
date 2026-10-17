@@ -815,6 +815,143 @@
   .skel-btn{width:46px;height:46px;}
   .skel-lines .skel-line{margin-top:0;margin-bottom:9px;width:80%;}
   .skel-lines .skel-line.short{width:45%;margin-bottom:0;}
+
+  /* ===================== ОТЗЫВЫ ===================== */
+  /* ---------- общее: золотые звёзды (поддерживают дробные значения 4.8) ---------- */
+  .rv-stars{
+    --rating:5;
+    display:inline-block;font-size:16px;line-height:1;letter-spacing:.14em;white-space:nowrap;
+    background:linear-gradient(90deg,var(--gold) 0,var(--gold) calc(var(--rating) / 5 * 100%),#2A3150 calc(var(--rating) / 5 * 100%));
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    filter:drop-shadow(0 0 6px rgba(255,194,26,.28));
+  }
+
+  /* ---------- [B] кнопка «Отзывы» в шапке ---------- */
+  #reviewsBtn{color:var(--gold);}
+  #reviewsBtn:hover{border-color:var(--gold);box-shadow:0 0 20px rgba(255,194,26,.28);}
+  #reviewsBtn svg{fill:var(--gold);stroke:var(--gold);}
+  #reviewsBtn .rating-badge{
+    display:flex;top:auto;bottom:-7px;right:-8px;min-width:26px;
+    font-family:var(--font-heading);letter-spacing:.01em;
+  }
+
+  /* ---------- [C] пункт «⭐ Отзывы» в боковом меню ---------- */
+  .menu-reviews{margin:10px 14px 0;padding-top:10px;border-top:1px solid var(--line-soft);}
+  .reviews-entry{
+    width:100%;display:flex;align-items:center;gap:12px;text-align:left;cursor:pointer;
+    padding:14px 16px;color:var(--text);
+    background:linear-gradient(135deg,rgba(255,194,26,.12),rgba(255,138,30,.05));
+    border:1.5px solid rgba(255,194,26,.32);border-radius:16px;
+    font-family:var(--font-body);font-size:16px;font-weight:600;
+    transition:transform .2s var(--ease), border-color .2s var(--ease);
+  }
+  .reviews-entry:active{transform:scale(.98);}
+  .reviews-entry:hover{border-color:var(--gold);}
+  .reviews-entry .re-star{font-size:20px;line-height:1;filter:drop-shadow(0 0 8px rgba(255,194,26,.5));}
+  .reviews-entry .re-name{flex:1;min-width:0;}
+  .reviews-entry .re-badge{
+    flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:10px;
+    background:var(--gold);color:#1A1204;font-family:var(--font-heading);font-size:12.5px;font-weight:900;
+  }
+  .reviews-entry .re-arrow{flex:0 0 auto;color:var(--muted-dim);}
+
+  /* ---------- [D] окно со списком отзывов ---------- */
+  #reviewsSheet{z-index:41;}
+  .reviews-container{display:flex;flex-direction:column;gap:16px;}
+  .rv-title{font-family:var(--font-heading);font-size:24px;font-weight:900;text-transform:uppercase;margin:4px 0 0;line-height:1.1;}
+
+  /* сводка */
+  .rv-summary{
+    position:relative;overflow:hidden;display:flex;flex-direction:column;gap:16px;padding:18px;
+    background:linear-gradient(160deg,#151B30,#0C1020);
+    border:1.5px solid var(--line);border-radius:var(--border-radius-card);
+  }
+  .rv-summary::before{
+    content:"";position:absolute;right:-60px;top:-60px;width:180px;height:180px;border-radius:50%;
+    background:radial-gradient(circle,rgba(255,194,26,.20),transparent 70%);pointer-events:none;
+  }
+  .rv-summary-top{position:relative;display:flex;align-items:center;gap:16px;}
+  .rv-score{
+    flex:0 0 auto;font-family:var(--font-display);font-weight:900;font-size:54px;line-height:1;letter-spacing:-.02em;
+    background:linear-gradient(180deg,#FFD66B,#FF9A1E);-webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+  }
+  .rv-score small{font-size:18px;font-weight:700;-webkit-text-fill-color:var(--muted-dim);color:var(--muted-dim);margin-left:2px;}
+  .rv-summary-meta{display:flex;flex-direction:column;gap:7px;min-width:0;}
+  .rv-summary-meta .rv-stars{font-size:22px;}
+  .rv-count{font-size:13px;color:var(--muted);font-weight:500;}
+  .rv-summary .btn-primary{position:relative;}
+
+  /* список карточек */
+  .rv-list{display:flex;flex-direction:column;gap:12px;}
+  .rv-card{
+    padding:14px 16px 16px;background:var(--bg-card);
+    border:1.5px solid var(--line);border-radius:var(--border-radius-card);
+    animation:rvIn .35s var(--ease) both;
+  }
+  @keyframes rvIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+  .rv-card-head{display:flex;align-items:center;gap:11px;margin-bottom:10px;}
+  .rv-avatar{
+    flex:0 0 auto;width:38px;height:38px;border-radius:13px;display:flex;align-items:center;justify-content:center;
+    background:var(--grad);color:#1A0A00;font-family:var(--font-heading);font-weight:900;font-size:16px;text-transform:uppercase;
+  }
+  .rv-author{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .rv-author b{font-size:14.5px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .rv-date{font-size:12px;color:var(--muted-dim);font-weight:500;}
+  .rv-card .rv-stars{flex:0 0 auto;font-size:14px;}
+  .rv-text{margin:0;font-size:14px;line-height:1.6;color:#D3D9EE;white-space:pre-wrap;overflow-wrap:anywhere;}
+
+  /* пустое состояние */
+  .rv-empty{
+    display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;
+    padding:30px 18px;color:var(--muted);font-size:14px;line-height:1.6;
+    border:1.5px dashed var(--line);border-radius:var(--border-radius-card);background:rgba(255,255,255,.02);
+  }
+  .rv-empty .rv-empty-star{font-size:34px;line-height:1;color:#2A3150;}
+  .rv-empty[hidden]{display:none;}
+
+  /* ---------- окно «Написать отзыв» ---------- */
+  #reviewFormSheet,#reviewSuccessSheet{z-index:46;}
+  .rv-form-sub{font-size:13px;color:var(--muted);line-height:1.55;margin:0 0 4px;}
+
+  /* выбор оценки: 5 звёзд на radio-кнопках (работает без JS; значение — input:checked) */
+  .rv-rate{
+    display:flex;flex-direction:row-reverse;justify-content:center;gap:6px;
+    padding:14px 8px;margin-top:6px;
+    background:var(--bg);border:1.5px solid var(--line);border-radius:16px;
+  }
+  .rv-rate.err{border-color:var(--danger);box-shadow:0 0 0 4px rgba(255,92,122,.15);}
+  .rv-rate input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;}
+  .rv-rate label{
+    cursor:pointer;font-size:42px;line-height:1;color:#2A3150;padding:2px 3px;
+    transition:color .15s var(--ease), transform .25s var(--ease-spring), filter .2s var(--ease);
+    -webkit-user-select:none;user-select:none;
+  }
+  .rv-rate label:active{transform:scale(.82);}
+  .rv-rate input:checked ~ label,
+  .rv-rate label:hover,
+  .rv-rate label:hover ~ label{color:var(--gold);filter:drop-shadow(0 0 10px rgba(255,194,26,.45));}
+  .rv-rate input:checked + label{transform:scale(1.08);}
+  .rv-rate input:focus-visible + label{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px;}
+  .rv-rate-hint{min-height:18px;margin-top:10px;text-align:center;font-size:13px;font-weight:600;color:var(--muted);}
+
+  .rv-textarea{min-height:130px;}
+  .rv-counter{margin-top:6px;text-align:right;font-size:11.5px;font-weight:600;color:var(--muted-dim);}
+  .rv-note{
+    display:flex;gap:8px;align-items:flex-start;margin-top:14px;padding:11px 13px;
+    font-size:12px;line-height:1.55;color:var(--muted);
+    border:1.5px dashed var(--line);border-radius:12px;background:rgba(255,255,255,.02);
+  }
+  .rv-note span{flex:0 0 auto;}
+
+  @media (max-width:360px){
+    .rv-score{font-size:46px;}
+    .rv-rate label{font-size:36px;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .rv-card,.rv-rate label{animation:none;transition-duration:.01s;}
+  }
 </style>
 </head>
 <body>
@@ -862,6 +999,12 @@
       <svg class="logo-svg" role="img" aria-label="SH SHOP"><use href="#sh-logo"/></svg>
     </div>
     <div class="header-actions">
+      <button class="icon-btn" id="reviewsBtn" type="button" aria-label="Отзывы">
+  <svg width="18" height="18" viewBox="0 0 24 24" stroke-width="1.4" stroke-linejoin="round">
+    <path d="M12 3.2l2.6 5.5 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.5l6-.8L12 3.2Z"/>
+  </svg>
+  <span class="icon-badge rating-badge" id="reviewsBadge">4.8</span>
+</button>
       <button class="icon-btn" id="favBtn" aria-label="Избранное">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20.5s-7.6-4.6-10-9.1C.5 8 2 4.7 5.3 4.1c2-.4 3.9.5 5 2.2 1.1-1.7 3-2.6 5-2.2C18.6 4.7 20 8 19.6 9c-2 4.9-7.6 11.5-7.6 11.5Z"/></svg>
         <span class="icon-badge" id="favCount">0</span>
@@ -1007,6 +1150,124 @@
   </div>
 </div>
 
+<!-- 1. Список отзывов -->
+<div class="sheet" id="reviewsSheet">
+  <div class="sheet-drag-zone">
+    <button class="sheet-close" data-close aria-label="Закрыть">×</button>
+    <div class="sheet-handle"></div>
+  </div>
+  <div class="sheet-inner">
+    <div class="reviews-container" id="reviewsContainer">
+
+      <h2 class="rv-title">Отзывы</h2>
+
+      <!-- сводка -->
+      <section class="rv-summary" aria-label="Средний рейтинг">
+        <div class="rv-summary-top">
+          <div class="rv-score" id="rvScore">4.8<small>/5</small></div>
+          <div class="rv-summary-meta">
+            <span class="rv-stars" id="rvSummaryStars" style="--rating:4.8" aria-hidden="true">★★★★★</span>
+            <span class="rv-count" id="rvCount">12 отзывов</span>
+          </div>
+        </div>
+        <button class="btn-primary" id="rvWriteBtn" type="button">Оставить отзыв</button>
+      </section>
+
+      <!-- список (карточки рисуются по шаблону ниже) -->
+      <div class="rv-list" id="rvList">
+        <!-- пример карточки — удали, когда подключишь данные -->
+        <article class="rv-card">
+          <header class="rv-card-head">
+            <div class="rv-avatar">И</div>
+            <div class="rv-author"><b>Иван</b><span class="rv-date">12 октября 2026</span></div>
+            <span class="rv-stars" style="--rating:5" aria-label="Оценка 5 из 5">★★★★★</span>
+          </header>
+          <p class="rv-text">Заказ привезли в тот же день, всё оригинал и аккуратно упаковано. Менеджер быстро ответил на вопросы.</p>
+        </article>
+        <article class="rv-card">
+          <header class="rv-card-head">
+            <div class="rv-avatar">А</div>
+            <div class="rv-author"><b>Алексей</b><span class="rv-date">9 октября 2026</span></div>
+            <span class="rv-stars" style="--rating:4" aria-label="Оценка 4 из 5">★★★★★</span>
+          </header>
+          <p class="rv-text">Хороший выбор жидкостей, цены адекватные. Доставка чуть задержалась, но предупредили заранее.</p>
+        </article>
+      </div>
+
+      <!-- пустое состояние: показывается, когда одобренных отзывов нет -->
+      <div class="rv-empty" id="rvEmpty" hidden>
+        <div class="rv-empty-star">★</div>
+        <div>Пока нет отзывов.<br>Станьте первым, кто поделится впечатлением!</div>
+      </div>
+
+      <!-- шаблон карточки для JS -->
+      <template id="rvCardTpl">
+        <article class="rv-card">
+          <header class="rv-card-head">
+            <div class="rv-avatar"></div>
+            <div class="rv-author"><b></b><span class="rv-date"></span></div>
+            <span class="rv-stars" style="--rating:5">★★★★★</span>
+          </header>
+          <p class="rv-text"></p>
+        </article>
+      </template>
+
+    </div>
+  </div>
+</div>
+
+
+<!-- 2. Форма «Написать отзыв» -->
+<div class="sheet" id="reviewFormSheet">
+  <div class="sheet-drag-zone">
+    <button class="sheet-close" data-close aria-label="Закрыть">×</button>
+    <div class="sheet-handle"></div>
+  </div>
+  <div class="sheet-inner">
+    <div class="pd-name" style="margin-top:4px;">Написать отзыв</div>
+    <p class="rv-form-sub">Ваша оценка помогает другим покупателям сделать выбор.</p>
+
+    <div class="label" style="margin-top:18px;">Ваша оценка</div>
+    <div class="rv-rate" id="rvRate" role="radiogroup" aria-label="Оценка от 1 до 5">
+      <!-- порядок 5→1 нужен для подсветки «все звёзды до выбранной» -->
+      <input type="radio" name="rvRating" id="rvStar5" value="5"><label for="rvStar5" title="Отлично" aria-label="5 звёзд">★</label>
+      <input type="radio" name="rvRating" id="rvStar4" value="4"><label for="rvStar4" title="Хорошо" aria-label="4 звезды">★</label>
+      <input type="radio" name="rvRating" id="rvStar3" value="3"><label for="rvStar3" title="Нормально" aria-label="3 звезды">★</label>
+      <input type="radio" name="rvRating" id="rvStar2" value="2"><label for="rvStar2" title="Плохо" aria-label="2 звезды">★</label>
+      <input type="radio" name="rvRating" id="rvStar1" value="1"><label for="rvStar1" title="Ужасно" aria-label="1 звезда">★</label>
+    </div>
+    <div class="rv-rate-hint" id="rvRateHint">Нажмите на звезду</div>
+
+    <div class="label" style="margin-top:14px;">Ваш отзыв</div>
+    <textarea id="rvText" class="text-input rv-textarea" maxlength="2000"
+              placeholder="Расскажите о качестве товаров и доставки..."></textarea>
+    <div class="rv-counter"><span id="rvTextCount">0</span> / 2000</div>
+
+    <div class="form-error" id="rvError"></div>
+
+    <button class="btn-primary" id="rvSubmitBtn" type="button" style="margin-top:6px;">Отправить на проверку</button>
+
+    <div class="rv-note"><span>🛡️</span><div>Отзыв появится в списке после проверки администратором.</div></div>
+  </div>
+</div>
+
+
+<!-- 3. «Спасибо» после отправки -->
+<div class="sheet" id="reviewSuccessSheet">
+  <div class="sheet-drag-zone">
+    <button class="sheet-close" data-close aria-label="Закрыть">×</button>
+    <div class="sheet-handle"></div>
+  </div>
+  <div class="sheet-inner">
+    <div class="success-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg>
+    </div>
+    <div class="success-title">Спасибо за отзыв!</div>
+    <div class="success-sub">Он отправлен на проверку и скоро появится в списке.</div>
+    <button class="btn-secondary" data-close>Закрыть</button>
+  </div>
+</div>
+
 <!-- Меню категорий -->
 <div class="menu-overlay" id="menuOverlay"></div>
 
@@ -1020,6 +1281,15 @@
 
   <nav class="sidebar-body">
     <div class="cat-nav" id="catList"></div>
+
+    <div class="menu-reviews">
+      <button class="reviews-entry" id="menuReviewsBtn" type="button">
+        <span class="re-star" aria-hidden="true">⭐</span>
+        <span class="re-name">Отзывы</span>
+        <span class="re-badge" id="menuReviewsBadge">4.8</span>
+        <svg class="re-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>
 
     <!-- сюда JS может подгружать дополнительные блоки -->
     <div class="menu-dynamic" id="menuDynamic"></div>
@@ -3083,6 +3353,266 @@ function menuPass(p){ return !menuFilter || menuFilter.test(p); }
     if (chip.dataset.cat === activeCategory) renderGrid(true);
   }, true);
 })();
+
+/* ===================== ОТЗЫВЫ ===================== */
+(function initReviews(){
+  'use strict';
+
+  const API_URL     = '/api/reviews';
+  const SUCCESS_MSG = 'Ваш отзыв отправлен на модерацию и появится после проверки администратором.';
+  const RATING_HINTS = { 1:'Ужасно', 2:'Плохо', 3:'Нормально', 4:'Хорошо', 5:'Отлично' };
+
+  const $ = id => document.getElementById(id);
+  const el = {
+    headerBtn:   $('reviewsBtn'),
+    menuBtn:     $('menuReviewsBtn'),
+    badgeHeader: $('reviewsBadge'),
+    badgeMenu:   $('menuReviewsBadge'),
+    score:       $('rvScore'),
+    sumStars:    $('rvSummaryStars'),
+    count:       $('rvCount'),
+    list:        $('rvList'),
+    empty:       $('rvEmpty'),
+    tpl:         $('rvCardTpl'),
+    writeBtn:    $('rvWriteBtn'),
+    rate:        $('rvRate'),
+    rateHint:    $('rvRateHint'),
+    text:        $('rvText'),
+    textCount:   $('rvTextCount'),
+    error:       $('rvError'),
+    submit:      $('rvSubmitBtn'),
+    success:     $('reviewSuccessSheet'),
+  };
+  if (!el.list || !el.tpl || !el.rate || !el.submit) return;   // верстка не подключена
+
+  let selectedRating = 5;
+  let loadSeq = 0;
+
+  /* ---------- вспомогательное ---------- */
+  function plural(n, one, few, many){
+    const m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+    return many;
+  }
+  const reviewsWord = n => `${n} ${plural(n, 'отзыв', 'отзыва', 'отзывов')}`;
+
+  function fmtDate(iso){
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    return d.toLocaleDateString('ru-RU', { day:'numeric', month:'long', year:'numeric' });
+  }
+
+  function haptic(kind){ try { tg?.HapticFeedback?.notificationOccurred(kind); } catch(e){} }
+
+  /* ---------- 1. ЗАГРУЗКА И ОТРИСОВКА ---------- */
+  function renderSummary(average, count){
+    const has = count > 0;
+    const avg = has ? Number(average).toFixed(1) : '';
+
+    if (el.score)     el.score.innerHTML = has ? `${avg}<small>/5</small>` : '—';
+    if (el.sumStars)  el.sumStars.style.setProperty('--rating', has ? Number(average) : 0);
+    if (el.count)     el.count.textContent = has ? reviewsWord(count) : 'Пока нет отзывов';
+
+    [el.badgeHeader, el.badgeMenu].forEach(b => {
+      if (!b) return;
+      b.textContent = avg;
+      b.style.display = has ? '' : 'none';     // '' → берём display из CSS (flex)
+    });
+  }
+
+  function renderList(reviews){
+    el.list.textContent = '';
+    const frag = document.createDocumentFragment();
+
+    reviews.forEach((r, i) => {
+      const card = el.tpl.content.firstElementChild.cloneNode(true);
+      const name = String(r.author_name || 'Аноним');
+
+      card.querySelector('.rv-avatar').textContent = (Array.from(name)[0] || '?').toUpperCase();
+      card.querySelector('.rv-author b').textContent = name;
+      card.querySelector('.rv-date').textContent = fmtDate(r.created_at);
+      card.querySelector('.rv-text').textContent = r.text || '';
+
+      const stars = card.querySelector('.rv-stars');
+      const rating = Math.max(0, Math.min(5, Number(r.rating) || 0));
+      stars.style.setProperty('--rating', rating);
+      stars.setAttribute('aria-label', `Оценка ${rating} из 5`);
+
+      card.style.animationDelay = `${Math.min(i, 8) * 40}ms`;
+      frag.appendChild(card);
+    });
+
+    el.list.appendChild(frag);
+    if (el.empty) el.empty.hidden = reviews.length > 0;
+  }
+
+  async function fetchReviews(opts){
+    const silent = !!(opts && opts.silent);
+    const seq = ++loadSeq;                        // игнорируем устаревшие ответы
+    try {
+      const res = await fetch(API_URL, { headers:{ 'Accept':'application/json' } });
+      if (!res.ok) throw new Error('Не удалось загрузить отзывы');
+      const data = await res.json();
+      if (seq !== loadSeq) return;
+
+      const reviews = Array.isArray(data.reviews) ? data.reviews : [];
+      const count   = Number.isFinite(+data.count) ? +data.count : reviews.length;
+      renderSummary(data.average, count);
+      renderList(reviews);
+    } catch(e){
+      if (!silent) showToast(e.message || 'Не удалось загрузить отзывы', 'error');
+    }
+  }
+
+  /* ---------- 2. ИНТЕРАКТИВНЫЕ ЗВЁЗДЫ ----------
+     Подсветка при наведении и «все звёзды до выбранной» делает CSS (radio + :checked / :hover).
+     Здесь — хранение значения, подпись под звёздами и сброс. */
+  function setRating(value){
+    selectedRating = value;
+    const input = $('rvStar' + value);
+    if (input) input.checked = true;
+    el.rate.classList.remove('err');
+    if (el.rateHint) el.rateHint.textContent = RATING_HINTS[value] || 'Нажмите на звезду';
+  }
+
+  el.rate.addEventListener('change', e => {
+    const v = parseInt(e.target.value, 10);
+    if (v >= 1 && v <= 5){
+      setRating(v);
+      try { tg?.HapticFeedback?.selectionChanged(); } catch(err){}
+    }
+  });
+
+  // подпись при наведении (десктоп), возврат к выбранной при уходе курсора
+  el.rate.addEventListener('mouseover', e => {
+    const lab = e.target.closest('label');
+    if (lab && el.rateHint) el.rateHint.textContent = lab.title || '';
+  });
+  el.rate.addEventListener('mouseleave', () => {
+    if (el.rateHint) el.rateHint.textContent = RATING_HINTS[selectedRating] || '';
+  });
+
+  /* ---------- счётчик символов ---------- */
+  function syncCounter(){ if (el.textCount) el.textCount.textContent = el.text.value.length; }
+  el.text.addEventListener('input', () => {
+    syncCounter();
+    el.text.classList.remove('err');
+    el.error.textContent = '';
+  });
+
+  function resetForm(){
+    el.text.value = '';
+    el.text.classList.remove('err');
+    el.error.textContent = '';
+    syncCounter();
+    setRating(5);
+  }
+
+  /* ---------- 3. ОТПРАВКА ОТЗЫВА ---------- */
+  function authorNameOf(user){
+    const full = [user.first_name, user.last_name].filter(Boolean).join(' ').trim();
+    return full || user.username || 'Покупатель';
+  }
+
+  async function submitReview(){
+    el.error.textContent = '';
+    el.text.classList.remove('err');
+
+    const user = tg?.initDataUnsafe?.user || null;   // Telegram.WebApp.initDataUnsafe.user
+    if (!user || !user.id){
+      el.error.textContent = 'Откройте магазин через Telegram, чтобы оставить отзыв';
+      haptic('error');
+      return;
+    }
+
+    const text = el.text.value.trim();
+    if (!(selectedRating >= 1 && selectedRating <= 5)){
+      el.rate.classList.add('err');
+      el.error.textContent = 'Поставьте оценку от 1 до 5';
+      haptic('error');
+      return;
+    }
+    if (!text){
+      el.text.classList.add('err');
+      el.error.textContent = 'Напишите пару слов об отзыве';
+      el.text.focus();
+      haptic('error');
+      return;
+    }
+
+    const payload = {
+      telegram_id: user.id,
+      author_name: authorNameOf(user),
+      username:    user.username || '',
+      rating:      selectedRating,
+      text:        text,
+      init_data:   tg?.initData || '',     // понадобится для серверной проверки подписи Telegram
+    };
+
+    el.submit.disabled = true;
+    el.submit.textContent = 'Отправка...';
+
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok){
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Не удалось отправить отзыв');
+      }
+
+      resetForm();
+      openSheet('reviewSuccessSheet');          // закрывает форму и показывает «Спасибо»
+      haptic('success');
+    } catch(e){
+      el.error.textContent = e.message;
+      showToast(e.message, 'error');
+      haptic('error');
+    } finally {
+      el.submit.disabled = false;
+      el.submit.textContent = 'Отправить на проверку';
+    }
+  }
+  el.submit.addEventListener('click', submitReview);
+
+  /* ---------- открытие окон ---------- */
+  function openReviews(){
+    openSheet('reviewsSheet');
+    fetchReviews({ silent:true });     // обновляем список при каждом открытии
+  }
+
+  el.headerBtn?.addEventListener('click', openReviews);
+
+  el.menuBtn?.addEventListener('click', () => {
+    // закрываем боковое меню штатной кнопкой, затем открываем отзывы
+    if ($('sidebarMenu')?.classList.contains('active')) $('menuClose')?.click();
+    openReviews();
+  });
+
+  el.writeBtn?.addEventListener('click', () => {
+    setRating(selectedRating);
+    openSheet('reviewFormSheet');
+  });
+
+  /* ---------- тексты окна «Спасибо» ---------- */
+  if (el.success){
+    const t = el.success.querySelector('.success-title');
+    const s = el.success.querySelector('.success-sub');
+    if (t) t.textContent = 'Спасибо!';
+    if (s) s.textContent = SUCCESS_MSG;
+  }
+
+  /* ---------- старт ---------- */
+  setRating(5);
+  syncCounter();
+  fetchReviews({ silent:true });       // подтянуть рейтинг в бейджи при загрузке магазина
+
+  window.fetchReviews = fetchReviews;  // чтобы можно было вызвать из консоли/других модулей
+})();
+
 </script>
 </body>
 </html>

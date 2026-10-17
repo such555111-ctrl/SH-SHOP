@@ -4,11 +4,16 @@ import uuid
 import logging
 import threading
 import functools
+import re
 from datetime import datetime, timezone
 
 from flask import Flask, request, send_from_directory, abort, jsonify
 import telebot
 from telebot import types
+
+from sqlalchemy import (create_engine, Column, Integer, BigInteger, String, Text,
+                        Boolean, DateTime, CheckConstraint, func)
+from sqlalchemy.orm import declarative_base, sessionmaker, scoped_session
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("sh_shop")
@@ -60,6 +65,233 @@ ALLOWED_PROMO_TYPES = {"percent", "fixed"}
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 8 МБ на файл
+
+
+# =====================================================================
+#  ОТЗЫВЫ: база данных, API и модерация в Telegram
+# =====================================================================
+
+DATABASE_URL = os.environ.get("DATABASE_URL") or "sqlite:///" + os.path.join(APP_DIR, "shop.db")
+if DATABASE_URL.startswith("postgres://"):          # старый формат ссылки
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
+SessionLocal = scoped_session(sessionmaker(bind=engine, expire_on_commit=False))
+Base = declarative_base()
+
+
+class Review(Base):
+    __tablename__ = "reviews"
+    __table_args__ = (CheckConstraint("rating BETWEEN 1 AND 5", name="ck_reviews_rating"),)
+
+    id          = Column(Integer, primary_key=True)
+    telegram_id = Column(BigInteger, nullable=False, index=True)
+    author_name = Column(String(64), nullable=False)
+    rating      = Column(Integer, nullable=False)
+    text        = Column(Text, nullable=False)
+    is_approved = Column(Boolean, nullable=False, default=False, index=True)
+    created_at  = Column(DateTime(timezone=True), nullable=False,
+                         default=lambda: datetime.now(timezone.utc), index=True)
+
+    def to_public(self):
+        """Публичный вид: telegram_id наружу не отдаём."""
+        created = self.created_at
+        if created is not None and created.tzinfo is None:     # SQLite отдаёт без tz
+            created = created.replace(tzinfo=timezone.utc)
+        return {
+            "id": self.id,
+            "author_name": self.author_name,
+            "rating": self.rating,
+            "text": self.text,
+            "created_at": created.isoformat() if created else None,
+        }
+
+
+try:
+    Base.metadata.create_all(engine)       # создаст таблицу reviews, если её ещё нет
+except Exception:
+    log.exception("Не удалось подключиться к базе отзывов — проверьте DATABASE_URL")
+
+
+@app.teardown_appcontext
+def _close_db_session(exc=None):
+    SessionLocal.remove()
+
+
+REVIEW_MAX_TEXT = 2000
+REVIEW_MAX_NAME = 64
+REVIEW_MAX_PENDING = 3      # максимум неодобренных отзывов от одного пользователя
+
+
+def review_keyboard(review_id):
+    kb = types.InlineKeyboardMarkup()
+    kb.row(
+        types.InlineKeyboardButton("✅ Одобрить", callback_data=f"rv:ok:{review_id}"),
+        types.InlineKeyboardButton("❌ Отклонить", callback_data=f"rv:no:{review_id}"),
+    )
+    return kb
+
+
+def notify_admins_new_review(review_id, author_name, username, telegram_id, rating, text):
+    who = f"{author_name} (@{username})" if username else f"{author_name} (ID {telegram_id})"
+    shown = text if len(text) <= 3000 else text[:3000] + "…"
+    admin_text = (
+        "💬 Новый отзыв на модерацию!\n"
+        f"Автор: {who}\n"
+        f"Оценка: {'⭐' * rating} ({rating}/5)\n"
+        f"Текст: \"{shown}\""
+    )
+    kb = review_keyboard(review_id)
+    for admin_id in ADMIN_CHAT_IDS:
+        try:
+            bot.send_message(admin_id, admin_text, reply_markup=kb)
+        except Exception as e:
+            log.warning("Не удалось уведомить администратора %s: %s", admin_id, e)
+
+
+# --- API отзывов ------------------------------------------------------
+
+@app.route("/api/reviews", methods=["GET"])
+def get_reviews():
+    db = SessionLocal()
+    try:
+        items = (
+            db.query(Review)
+            .filter(Review.is_approved.is_(True))
+            .order_by(Review.created_at.desc(), Review.id.desc())
+            .all()
+        )
+        count = len(items)
+        average = round(sum(r.rating for r in items) / count, 1) if count else 0
+        return jsonify({
+            "reviews": [r.to_public() for r in items],
+            "average": average,       # напр. 4.8 (из 5)
+            "count": count,
+        })
+    except Exception:
+        log.exception("Не удалось загрузить отзывы")
+        return jsonify({"error": "Не удалось загрузить отзывы"}), 500
+
+
+@app.route("/api/reviews", methods=["POST"])
+def create_review():
+    data = request.get_json(force=True, silent=True) or {}
+
+    try:
+        telegram_id = int(data.get("telegram_id"))
+        if telegram_id <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        abort(400, description="Не удалось определить Telegram-аккаунт")
+
+    author_name = " ".join(str(data.get("author_name") or "").split())[:REVIEW_MAX_NAME]
+    text = str(data.get("text") or "").strip()
+    username = re.sub(r"[^A-Za-z0-9_]", "", str(data.get("username") or "").lstrip("@"))[:64]
+    if not author_name:
+        abort(400, description="Не указано имя автора")
+    if not text:
+        abort(400, description="Напишите текст отзыва")
+    if len(text) > REVIEW_MAX_TEXT:
+        abort(400, description=f"Отзыв слишком длинный (максимум {REVIEW_MAX_TEXT} символов)")
+
+    raw_rating = data.get("rating")
+    try:
+        if isinstance(raw_rating, bool):
+            raise ValueError
+        rating = int(raw_rating)
+    except (TypeError, ValueError):
+        abort(400, description="Поставьте оценку от 1 до 5")
+    if not 1 <= rating <= 5:
+        abort(400, description="Оценка должна быть от 1 до 5")
+
+    db = SessionLocal()
+    try:
+        pending = (
+            db.query(func.count(Review.id))
+            .filter(Review.telegram_id == telegram_id, Review.is_approved.is_(False))
+            .scalar()
+        )
+        if pending >= REVIEW_MAX_PENDING:
+            return jsonify({"error": "Ваши прошлые отзывы ещё на модерации — подождите немного"}), 429
+
+        review = Review(
+            telegram_id=telegram_id,
+            author_name=author_name,
+            rating=rating,
+            text=text,
+            is_approved=False,          # виден только после одобрения админом
+        )
+        db.add(review)
+        db.commit()
+        review_id = review.id
+    except Exception:
+        db.rollback()
+        log.exception("Не удалось сохранить отзыв")
+        return jsonify({"error": "Не удалось сохранить отзыв"}), 500
+
+    notify_admins_new_review(review_id, author_name, username, telegram_id, rating, text)
+    return jsonify({"ok": True, "review_id": review_id, "status": "pending"}), 201
+
+
+# --- Модерация кнопками в Telegram -------------------------------------
+
+REVIEW_APPROVED_TEXT = "✅ Отзыв одобрен и опубликован в магазине"
+REVIEW_REJECTED_TEXT = "❌ Отзыв отклонен"
+REVIEW_DONE_TEXT = "ℹ️ Этот отзыв уже обработан"
+
+
+def _finish_moderation_message(call, new_text):
+    """Заменяем текст сообщения админа (кнопки при этом исчезают)."""
+    try:
+        bot.edit_message_text(new_text, call.message.chat.id, call.message.message_id)
+    except Exception as e:
+        log.warning("Не удалось обновить сообщение модерации: %s", e)
+
+
+@bot.callback_query_handler(func=lambda c: bool(c.data) and c.data.startswith("rv:"))
+def on_review_moderation(call: types.CallbackQuery):
+    # кнопки доступны только администраторам
+    if not call.from_user or call.from_user.id not in ADMIN_CHAT_IDS:
+        bot.answer_callback_query(call.id, "Нет доступа", show_alert=True)
+        return
+
+    try:
+        _, action, raw_id = call.data.split(":")
+        review_id = int(raw_id)
+        if action not in ("ok", "no"):
+            raise ValueError
+    except ValueError:
+        bot.answer_callback_query(call.id, "Некорректные данные кнопки", show_alert=True)
+        return
+
+    db = SessionLocal()
+    try:
+        review = db.get(Review, review_id)
+
+        # удалён или уже одобрен другим админом
+        if review is None or review.is_approved:
+            bot.answer_callback_query(call.id, "Этот отзыв уже обработан")
+            _finish_moderation_message(call, REVIEW_DONE_TEXT)
+            return
+
+        if action == "ok":
+            review.is_approved = True
+            db.commit()
+            result_text = REVIEW_APPROVED_TEXT
+        else:
+            db.delete(review)
+            db.commit()
+            result_text = REVIEW_REJECTED_TEXT
+    except Exception:
+        db.rollback()
+        log.exception("Ошибка модерации отзыва %s", review_id)
+        bot.answer_callback_query(call.id, "Ошибка базы данных, попробуйте ещё раз", show_alert=True)
+        return
+    finally:
+        SessionLocal.remove()
+
+    bot.answer_callback_query(call.id, "Готово")
+    _finish_moderation_message(call, result_text)
 
 
 # --- Вспомогательные функции для товаров и авторизации админа -----------
@@ -1062,7 +1294,7 @@ def setup_webhook():
         return
     url = f"{BASE_URL}/webhook/{BOT_TOKEN}"
     bot.remove_webhook()
-    bot.set_webhook(url=url)
+    bot.set_webhook(url=url, allowed_updates=["message", "callback_query"])
     log.info("Webhook установлен: %s", url)
 
 
