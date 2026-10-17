@@ -1030,7 +1030,8 @@ def create_order():
 
     points_discount = round(points_to_spend * POINT_VALUE, 2)      # скидка в рублях = баллы * 0,5
     total = round(goods_total - points_discount + delivery["fee"], 2)   # к оплате рублями
-    cashback = cashback_points(total) if customer_chat_id else 0       # баллы за оплаченные рубли
+    # если оплата частично баллами — кешбэк за этот заказ не начисляется
+    cashback = cashback_points(total) if (customer_chat_id and points_to_spend == 0) else 0
 
     stock_err = reserve_stock(items)       # списываем остатки только после всех проверок
     if stock_err:

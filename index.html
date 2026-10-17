@@ -2642,7 +2642,7 @@ function checkoutTotal(){
   const goods = subtotal - discount;
   const loy = loyaltyCalc(goods);
   const total = round2(goods - loy.spendRub + fee);
-  const cashback = Number.isFinite(loyaltyBalance) ? cashbackPoints(total) : 0;   // баллы за сумму, оплаченную рублями
+  const cashback = (Number.isFinite(loyaltyBalance) && loy.spend === 0) ? cashbackPoints(total) : 0;   // при оплате баллами кешбэк не начисляется
   return { subtotal, discount, fee, points: loy.spend, pointsRub: loy.spendRub, cashback, total };
 }
 
