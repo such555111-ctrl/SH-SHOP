@@ -18,9 +18,4 @@ services:
         sync: false
       - key: SHOP_CONTACT
         value: SHvape_manager
-    # Опционально: платный постоянный диск, чтобы товары и загруженные фото
-    # не пропадали при рестарте/редеплое (см. README, раздел "Постоянное хранилище").
-    # disk:
-    #   name: sh-data
-    #   mountPath: /opt/render/project/src
-    #   sizeGB: 1
+    # Данные и фото хранятся в Neon (DATABASE_URL) — Persistent Disk не нужен.

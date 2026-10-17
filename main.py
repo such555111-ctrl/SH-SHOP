@@ -5,14 +5,18 @@ import logging
 import threading
 import functools
 import re
+import io
+import math
 from datetime import datetime, timezone
 
-from flask import Flask, request, send_from_directory, abort, jsonify
+from flask import Flask, request, send_from_directory, abort, jsonify, Response
 import telebot
 from telebot import types
 
 from sqlalchemy import (create_engine, Column, Integer, BigInteger, String, Text,
-                        Boolean, DateTime, CheckConstraint, func)
+                        Boolean, DateTime, CheckConstraint, LargeBinary, Float, JSON, func)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, sessionmaker, scoped_session
 
 logging.basicConfig(level=logging.INFO)
@@ -46,8 +50,7 @@ PRODUCTS_FILE = os.path.join(APP_DIR, "products.json")
 ORDERS_FILE = os.path.join(APP_DIR, "orders.json")
 QUESTIONS_FILE = os.path.join(APP_DIR, "questions.json")
 PROMOS_FILE = os.path.join(APP_DIR, "promos.json")
-UPLOAD_DIR = os.path.join(APP_DIR, "uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+UPLOAD_DIR = os.path.join(APP_DIR, "uploads")   # только для разового переноса старых фото в базу
 
 # Доставка и самовывоз
 try:
@@ -57,6 +60,17 @@ except ValueError:
 PICKUP_POINTS = [
     p.strip() for p in (os.environ.get("PICKUP_POINTS") or "Пролетарская,Девяткино,Мурино").split(",") if p.strip()
 ]
+
+# Программа лояльности: 1 балл = 1 рубль
+def _env_float(name, default):
+    try:
+        return float(os.environ.get(name, default))
+    except ValueError:
+        return float(default)
+
+POINT_VALUE = _env_float("POINT_VALUE_RUB", 0.5)             # 1 балл = 0,5 ₽
+CASHBACK_PERCENT = _env_float("CASHBACK_PERCENT", 5)        # % кешбэка от суммы, оплаченной рублями
+MAX_POINTS_PERCENT = _env_float("MAX_POINTS_PERCENT", 30)   # макс. доля суммы заказа, которую можно оплатить баллами
 
 ALLOWED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 ALLOWED_BADGES = {"hit", "trend", "sale", "instock"}
@@ -75,7 +89,10 @@ DATABASE_URL = os.environ.get("DATABASE_URL") or "sqlite:///" + os.path.join(APP
 if DATABASE_URL.startswith("postgres://"):          # старый формат ссылки
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
+engine = create_engine(
+    DATABASE_URL, pool_pre_ping=True, pool_recycle=300,
+    json_serializer=lambda o: json.dumps(o, ensure_ascii=False),
+)
 SessionLocal = scoped_session(sessionmaker(bind=engine, expire_on_commit=False))
 Base = declarative_base()
 
@@ -106,11 +123,244 @@ class Review(Base):
             "created_at": created.isoformat() if created else None,
         }
 
+    def to_admin(self):
+        """Вид для админ-панели: с ID автора и статусом модерации."""
+        d = self.to_public()
+        d["telegram_id"] = self.telegram_id
+        d["is_approved"] = bool(self.is_approved)
+        return d
+
+
+# ---------------------------------------------------------------------
+#  ВСЕ ДАННЫЕ МАГАЗИНА — В БАЗЕ (Neon): товары, заказы, вопросы, промокоды, фото
+# ---------------------------------------------------------------------
+EXT_MIME = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+            ".webp": "image/webp", ".gif": "image/gif"}
+JSONType = JSON().with_variant(JSONB(), "postgresql")
+
+
+class _DocMixin:
+    """Документ с числовым id и JSON-телом — та же структура, что раньше лежала в *.json."""
+    id   = Column(Integer, primary_key=True, autoincrement=False)
+    data = Column(JSONType, nullable=False)
+
+
+class Product(_DocMixin, Base):
+    __tablename__ = "products"
+
+
+class Order(_DocMixin, Base):
+    __tablename__ = "orders"
+
+
+class Question(_DocMixin, Base):
+    __tablename__ = "questions"
+
+
+class Promo(_DocMixin, Base):
+    __tablename__ = "promos"
+
+
+class StoredImage(Base):
+    """Фото товаров хранятся прямо в базе (bytea) и отдаются по /uploads/<имя>."""
+    __tablename__ = "images"
+    filename     = Column(String(80), primary_key=True)
+    content_type = Column(String(64), nullable=False)
+    data         = Column(LargeBinary, nullable=False)
+    created_at   = Column(DateTime(timezone=True), nullable=False,
+                          default=lambda: datetime.now(timezone.utc))
+
+
+class Meta(Base):
+    __tablename__ = "meta"
+    key   = Column(String(64), primary_key=True)
+    value = Column(Text)
+
+
+class LoyaltyUser(Base):
+    """Баланс баллов покупателя. 1 балл = 1 рубль."""
+    __tablename__ = "loyalty_users"
+    id             = Column(Integer, primary_key=True)
+    telegram_id    = Column(BigInteger, nullable=False, unique=True, index=True)
+    points_balance = Column(Integer, nullable=False, default=0)
+    total_spent    = Column(Float, nullable=False, default=0)
+    created_at     = Column(DateTime(timezone=True), nullable=False,
+                            default=lambda: datetime.now(timezone.utc))
+
+
+# Отдельная фабрика сессий для данных магазина (не мешает сессиям отзывов).
+DocSession = sessionmaker(bind=engine, expire_on_commit=False)
 
 try:
-    Base.metadata.create_all(engine)       # создаст таблицу reviews, если её ещё нет
+    Base.metadata.create_all(engine)       # создаст все таблицы, если их ещё нет
 except Exception:
-    log.exception("Не удалось подключиться к базе отзывов — проверьте DATABASE_URL")
+    log.exception("Не удалось подключиться к базе — проверьте DATABASE_URL")
+
+
+def _get_or_create_loyalty(db, tg_id, lock=False):
+    q = db.query(LoyaltyUser).filter(LoyaltyUser.telegram_id == tg_id)
+    if lock:
+        q = q.with_for_update()          # блокировка строки в PostgreSQL (в SQLite игнорируется)
+    user = q.first()
+    if user is None:
+        user = LoyaltyUser(telegram_id=tg_id, points_balance=0, total_spent=0)
+        db.add(user)
+        try:
+            db.flush()
+        except IntegrityError:           # параллельный запрос успел создать запись
+            db.rollback()
+            user = q.first()
+    return user
+
+
+def loyalty_get(tg_id):
+    """Баланс покупателя; если записи нет — создаёт с нулевым балансом."""
+    with DocSession() as db:
+        try:
+            user = _get_or_create_loyalty(db, tg_id)
+            db.commit()
+            return {"telegram_id": user.telegram_id, "points_balance": user.points_balance}
+        except Exception:
+            db.rollback()
+            raise
+
+
+def loyalty_apply(tg_id, spend, earn, paid):
+    """Списывает spend баллов, начисляет earn баллов, добавляет paid к total_spent — одной транзакцией.
+    Бросает ValueError, если на балансе не хватает баллов. Возвращает новый баланс."""
+    with DocSession() as db:
+        try:
+            user = _get_or_create_loyalty(db, tg_id, lock=True)
+            if spend > user.points_balance:
+                raise ValueError("not enough points")
+            user.points_balance = user.points_balance - spend + earn
+            user.total_spent = float(user.total_spent or 0) + paid
+            db.commit()
+            return user.points_balance
+        except Exception:
+            db.rollback()
+            raise
+
+
+def loyalty_revert(tg_id, spend, earn, paid):
+    """Обратная операция при отмене заказа: возвращает списанные баллы, забирает начисленный кешбэк."""
+    with DocSession() as db:
+        try:
+            user = _get_or_create_loyalty(db, tg_id, lock=True)
+            user.points_balance = max(0, user.points_balance + spend - earn)
+            user.total_spent = max(0.0, float(user.total_spent or 0) - paid)
+            db.commit()
+            return user.points_balance
+        except Exception:
+            db.rollback()
+            raise
+
+
+def _load_docs(model):
+    with DocSession() as db:
+        rows = db.query(model).order_by(model.id).all()
+        return [dict(r.data) for r in rows]
+
+
+def _save_docs(model, items):
+    """Синхронизирует таблицу со списком items: новые добавляет, изменённые обновляет,
+    пропавшие удаляет. Неизменённые строки не трогаются."""
+    new = {int(it["id"]): it for it in items}
+    with DocSession() as db:
+        try:
+            existing = {r.id: r for r in db.query(model).all()}
+            for rid, row in existing.items():
+                if rid not in new:
+                    db.delete(row)
+            for rid, it in new.items():
+                row = existing.get(rid)
+                if row is None:
+                    db.add(model(id=rid, data=it))
+                elif row.data != it:
+                    row.data = it
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+
+
+try:
+    from PIL import Image, ImageOps
+except Exception:          # Pillow не установлен — фото сохраним как есть
+    Image = None
+
+
+def prepare_image(raw, ext):
+    """Сжимает фото (до 1600 px, WebP), чтобы база не пухла. Возвращает (bytes, content_type, ext)."""
+    fallback_type = EXT_MIME.get(ext, "application/octet-stream")
+    if Image is None:
+        return raw, fallback_type, ext
+    try:
+        img = Image.open(io.BytesIO(raw))
+        if getattr(img, "n_frames", 1) > 1:          # анимированный gif/webp — не трогаем
+            return raw, fallback_type, ext
+        img = ImageOps.exif_transpose(img)
+        img.thumbnail((1600, 1600))
+        if img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGBA" if "transparency" in img.info or img.mode in ("P", "LA") else "RGB")
+        buf = io.BytesIO()
+        img.save(buf, "WEBP", quality=85, method=4)
+        return buf.getvalue(), "image/webp", ".webp"
+    except Exception:
+        abort(400, description="Не удалось прочитать изображение")
+
+
+def purge_unused_images(candidate_urls):
+    """Удаляет из базы фото, на которые больше не ссылается ни один товар."""
+    names = {u.rsplit("/", 1)[-1] for u in candidate_urls if isinstance(u, str) and u.startswith("/uploads/")}
+    if not names:
+        return
+    still_used = set()
+    for p in _load_docs(Product):
+        for u in (p.get("images") or []) + [p.get("image")]:
+            if isinstance(u, str):
+                still_used.add(u.rsplit("/", 1)[-1])
+    unused = names - still_used
+    if not unused:
+        return
+    with DocSession() as db:
+        try:
+            db.query(StoredImage).filter(StoredImage.filename.in_(unused)).delete(synchronize_session=False)
+            db.commit()
+        except Exception:
+            db.rollback()
+            log.exception("Не удалось удалить неиспользуемые фото")
+
+
+def seed_from_files_once():
+    """Разовый перенос: если в базе ещё пусто, берём products/orders/questions/promos из *.json
+    и фото из папки uploads/. Повторно не запускается (флаг в таблице meta)."""
+    try:
+        with DocSession() as db:
+            if db.get(Meta, "seeded_v1"):
+                return
+        for model, path in ((Product, PRODUCTS_FILE), (Order, ORDERS_FILE),
+                            (Question, QUESTIONS_FILE), (Promo, PROMOS_FILE)):
+            if os.path.exists(path) and not _load_docs(model):
+                with open(path, "r", encoding="utf-8") as f:
+                    items = json.load(f)
+                if items:
+                    _save_docs(model, items)
+                    log.info("Перенесено в базу: %s (%d)", model.__tablename__, len(items))
+        if os.path.isdir(UPLOAD_DIR):
+            with DocSession() as db:
+                for fn in os.listdir(UPLOAD_DIR):
+                    ext = os.path.splitext(fn)[1].lower()
+                    if ext in ALLOWED_IMAGE_EXT and not db.get(StoredImage, fn):
+                        with open(os.path.join(UPLOAD_DIR, fn), "rb") as f:
+                            db.add(StoredImage(filename=fn, data=f.read(),
+                                               content_type=EXT_MIME.get(ext, "application/octet-stream")))
+                db.commit()
+        with DocSession() as db:
+            db.add(Meta(key="seeded_v1", value=datetime.now(timezone.utc).isoformat()))
+            db.commit()
+    except Exception:
+        log.exception("Не удалось выполнить первичный перенос данных в базу")
 
 
 @app.teardown_appcontext
@@ -233,6 +483,39 @@ def create_review():
     return jsonify({"ok": True, "review_id": review_id, "status": "pending"}), 201
 
 
+# --- Админ-панель: все отзывы и удаление --------------------------------
+
+@app.route("/api/admin/reviews", methods=["GET"])
+def admin_get_reviews():
+    require_admin()
+    db = SessionLocal()
+    try:
+        items = db.query(Review).order_by(Review.created_at.desc(), Review.id.desc()).all()
+        return jsonify([r.to_admin() for r in items])
+    except Exception:
+        log.exception("Не удалось загрузить отзывы для админ-панели")
+        return jsonify({"error": "Не удалось загрузить отзывы"}), 500
+
+
+@app.route("/api/admin/reviews/<int:rid>", methods=["DELETE"])
+def admin_delete_review(rid):
+    require_admin()
+    db = SessionLocal()
+    try:
+        review = db.get(Review, rid)
+        if review is None:
+            abort(404, description="Отзыв не найден")
+        db.delete(review)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        if getattr(e, "code", None) == 404:
+            raise
+        log.exception("Не удалось удалить отзыв %s", rid)
+        return jsonify({"error": "Не удалось удалить отзыв"}), 500
+    return "", 204
+
+
 # --- Модерация кнопками в Telegram -------------------------------------
 
 REVIEW_APPROVED_TEXT = "✅ Отзыв одобрен и опубликован в магазине"
@@ -318,55 +601,45 @@ def require_admin():
 
 
 def load_products():
-    if not os.path.exists(PRODUCTS_FILE):
-        return []
-    with open(PRODUCTS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    return _load_docs(Product)
 
 
 def save_products(items):
-    with open(PRODUCTS_FILE, "w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
+    _save_docs(Product, items)
 
 
 def load_orders():
-    if not os.path.exists(ORDERS_FILE):
-        return []
-    with open(ORDERS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    return _load_docs(Order)
 
 
 def save_orders(items):
-    with open(ORDERS_FILE, "w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
+    _save_docs(Order, items)
 
 
 def load_questions():
-    if not os.path.exists(QUESTIONS_FILE):
-        return []
-    with open(QUESTIONS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    return _load_docs(Question)
 
 
 def save_questions(items):
-    with open(QUESTIONS_FILE, "w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
+    _save_docs(Question, items)
 
 
 def load_promos():
-    if not os.path.exists(PROMOS_FILE):
-        return []
-    with open(PROMOS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    return _load_docs(Promo)
 
 
 def save_promos(items):
-    with open(PROMOS_FILE, "w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
+    _save_docs(Promo, items)
+
+
+seed_from_files_once()
 
 
 def fmt_price(n):
-    return f"{int(n):,}".replace(",", " ") + " ₽"
+    n = float(n)
+    if n.is_integer():
+        return f"{int(n):,}".replace(",", " ") + " ₽"
+    return f"{n:,.2f}".replace(",", " ").replace(".", ",") + " ₽"
 
 
 def sanitize_images(raw):
@@ -560,8 +833,7 @@ def cmd_start(message: types.Message):
         "Одноразки, жидкости, поды, расходники и шайбы — выбирайте в каталоге.\n"
         "📍 Самовывоз: Пролетарская, Девяткино, Мурино\n"
         "🚚 Доставка — 200 ₽\n\n"
-        "Нажмите кнопку ниже, чтобы открыть каталог и оформить заказ.\n\n"
-        "🔞 _Продукция содержит никотин, который вызывает зависимость. Только для лиц старше 18 лет._",
+        "Нажмите кнопку ниже, чтобы открыть каталог и оформить заказ.",
         reply_markup=keyboard,
         parse_mode="Markdown",
     )
@@ -582,13 +854,62 @@ def index():
 
 @app.route("/api/config", methods=["GET"])
 def public_config():
-    return jsonify({"contact": SHOP_CONTACT, "delivery_fee": DELIVERY_FEE, "pickup_points": PICKUP_POINTS})
+    return jsonify({"contact": SHOP_CONTACT, "delivery_fee": DELIVERY_FEE, "pickup_points": PICKUP_POINTS,
+                    "cashback_percent": CASHBACK_PERCENT, "max_points_percent": MAX_POINTS_PERCENT,
+                    "point_value": POINT_VALUE})
+
+
+@app.route("/api/loyalty/balance", methods=["GET"])
+def loyalty_balance():
+    """Баланс баллов покупателя. Нет записи — создаём с балансом 0."""
+    try:
+        tg_id = int(request.args.get("telegram_id", ""))
+        if tg_id <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        abort(400, description="Некорректный telegram_id")
+    try:
+        return jsonify(loyalty_get(tg_id))
+    except Exception:
+        log.exception("Не удалось получить баланс баллов")
+        return jsonify({"error": "Не удалось получить баланс"}), 500
+
+
+def parse_points(raw):
+    """points_to_spend → целое число >= 0 (баллы списываются только целыми)."""
+    if raw in (None, ""):
+        return 0
+    if isinstance(raw, bool):
+        abort(400, description="Некорректное количество баллов")
+    try:
+        v = float(raw)
+        if v < 0 or v != int(v):
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        abort(400, description="Укажите количество баллов целым числом")
+    return int(v)
+
+
+def max_points_for(goods_total):
+    """Максимум баллов к списанию: скидка в рублях (points * POINT_VALUE) не больше MAX_POINTS_PERCENT от суммы заказа."""
+    return max(0, int(goods_total * MAX_POINTS_PERCENT / 100 / POINT_VALUE + 1e-9))
+
+
+def cashback_points(paid_rub):
+    """Кешбэк в баллах: round((сумма_рублями * 5%) / 0,5), округление «half up»."""
+    return int(math.floor(paid_rub * CASHBACK_PERCENT / 100 / POINT_VALUE + 0.5 + 1e-9))
+
+
+def order_loyalty_args(o):
+    return (o.get("customer_chat_id"), int(o.get("points_spent") or 0),
+            int(o.get("cashback") or 0), o.get("total") or 0)
 
 
 @app.route("/products.json", methods=["GET"])
 def products():
-    # короткий кэш + ETag: повторные открытия не качают файл заново
-    resp = send_from_directory(APP_DIR, "products.json", max_age=30)
+    # каталог берётся из базы; короткий кэш, чтобы не дёргать Neon на каждое открытие
+    resp = jsonify(load_products())
+    resp.headers["Cache-Control"] = "public, max-age=30"
     return resp
 
 
@@ -645,6 +966,7 @@ def delivery_text(d):
 
 
 @app.route("/api/order", methods=["POST"])
+@app.route("/api/orders", methods=["POST"])
 @locked
 def create_order():
     data = request.get_json(force=True, silent=True) or {}
@@ -664,10 +986,6 @@ def create_order():
                 raise ValueError
         except (TypeError, ValueError):
             abort(400, description="Некорректное количество товара")
-
-    stock_err = reserve_stock(items)
-    if stock_err:
-        abort(400, description=stock_err)
 
     delivery, delivery_err = parse_delivery(data.get("delivery"))
     if delivery_err:
@@ -692,7 +1010,43 @@ def create_order():
             abort(400, description=promo_err)
         discount = compute_promo_discount(promo, subtotal)
 
-    total = subtotal - discount + delivery["fee"]
+    # --- баллы: проверяем до любых списаний ---
+    goods_total = subtotal - discount                       # сумма корзины с учётом промокода
+    points_to_spend = parse_points(data.get("points_to_spend"))
+    if points_to_spend:
+        if not customer_chat_id:
+            abort(400, description="Оплата баллами доступна только при заказе из Telegram")
+        try:
+            balance = loyalty_get(customer_chat_id)["points_balance"]
+        except Exception:
+            log.exception("Не удалось прочитать баланс баллов")
+            return jsonify({"error": "Не удалось проверить баланс баллов"}), 500
+        if points_to_spend > balance:
+            abort(400, description=f"Недостаточно баллов: на балансе {balance}")
+        max_points = max_points_for(goods_total)
+        if points_to_spend > max_points:
+            abort(400, description=f"Баллами можно оплатить не больше {MAX_POINTS_PERCENT:g}% суммы заказа "
+                                   f"(до {max_points} баллов)")
+
+    points_discount = round(points_to_spend * POINT_VALUE, 2)      # скидка в рублях = баллы * 0,5
+    total = round(goods_total - points_discount + delivery["fee"], 2)   # к оплате рублями
+    cashback = cashback_points(total) if customer_chat_id else 0       # баллы за оплаченные рубли
+
+    stock_err = reserve_stock(items)       # списываем остатки только после всех проверок
+    if stock_err:
+        abort(400, description=stock_err)
+
+    new_balance = None
+    if customer_chat_id:
+        try:
+            new_balance = loyalty_apply(customer_chat_id, points_to_spend, cashback, total)
+        except ValueError:
+            shift_stock(items, +1)           # вернуть только что списанные остатки
+            abort(400, description="Недостаточно баллов на балансе")
+        except Exception:
+            shift_stock(items, +1)
+            log.exception("Не удалось обновить баланс баллов")
+            return jsonify({"error": "Не удалось списать баллы, попробуйте ещё раз"}), 500
 
     orders = load_orders()
     new_id = (max([o.get("id", 0) for o in orders], default=0) + 1)
@@ -712,6 +1066,11 @@ def create_order():
         "customer_username": customer_username,
         "status": "new",
         "stock_deducted": True,
+        "goods_total": goods_total,
+        "points_spent": points_to_spend,
+        "points_discount": points_discount,
+        "cashback": cashback,
+        "loyalty_applied": bool(customer_chat_id),
         "messages": [],
     }
     orders.append(order)
@@ -731,6 +1090,8 @@ def create_order():
 
     delivery_block = delivery_text(delivery)
     fee_line = f"Доставка: {fmt_price(delivery['fee'])}\n" if delivery["fee"] else ""
+    loyalty_line = (f"Оплачено баллами: {points_to_spend} б. ({fmt_price(points_discount)}) | "
+                    f"Начислено кешбэка: {cashback} б. ({fmt_price(cashback * POINT_VALUE)})\n")
 
     discount_line = ""
     if discount > 0:
@@ -749,6 +1110,7 @@ def create_order():
                 f"{delivery_block}\n\n"
                 f"{discount_line}"
                 f"{fee_line}"
+                f"{loyalty_line}"
                 f"Итого: {fmt_price(total)}\n\n"
                 "Мы свяжемся с вами в этом чате, чтобы подтвердить заказ и время."
             )
@@ -764,6 +1126,7 @@ def create_order():
         f"{delivery_block}\n\n"
         f"{discount_line}"
         f"{fee_line}"
+        f"{loyalty_line}"
         f"Итого: {fmt_price(total)}\n"
         + (f"\nКомментарий: {comment}\n" if comment else "")
         + "\nОткройте панель администратора (вкладка «Заказы»), чтобы "
@@ -775,7 +1138,8 @@ def create_order():
         except Exception as e:
             log.warning("Не удалось уведомить администратора %s: %s", admin_id, e)
 
-    return jsonify({"ok": True, "order_id": new_id}), 201
+    return jsonify({"ok": True, "order_id": new_id, "total": total, "points_spent": points_to_spend,
+                    "points_discount": points_discount, "cashback": cashback, "points_balance": new_balance}), 201
 
 
 @app.route("/api/promo/check", methods=["POST"])
@@ -847,6 +1211,9 @@ def customer_cancel_order(oid):
     if order.get("stock_deducted"):
         shift_stock(order.get("items") or [], +1)   # отменённый заказ возвращает товар на склад
         order["stock_deducted"] = False
+    if order.get("loyalty_applied"):
+        loyalty_revert(*order_loyalty_args(order))   # вернуть баллы, забрать кешбэк
+        order["loyalty_applied"] = False
     save_orders(orders)
 
     for admin_id in ADMIN_CHAT_IDS:
@@ -859,6 +1226,7 @@ def customer_cancel_order(oid):
 
 
 @app.route("/api/question", methods=["POST"])
+@locked
 def create_question():
     data = request.get_json(force=True, silent=True) or {}
 
@@ -924,8 +1292,15 @@ def create_question():
 
 @app.route("/uploads/<path:filename>", methods=["GET"])
 def uploaded_file(filename):
-    # имена файлов — uuid, содержимое не меняется, можно кэшировать надолго
-    return send_from_directory(UPLOAD_DIR, filename, max_age=60 * 60 * 24 * 30)
+    # фото лежат в базе; имена — uuid, содержимое не меняется, кэшируем надолго
+    with DocSession() as db:
+        img = db.get(StoredImage, filename)
+        if img is None:
+            abort(404)
+        resp = Response(img.data, mimetype=img.content_type)
+    resp.headers["Cache-Control"] = "public, max-age=2592000, immutable"
+    resp.set_etag(filename)
+    return resp.make_conditional(request)
 
 
 @app.route("/admin", methods=["GET"])
@@ -1018,6 +1393,7 @@ def admin_update_product(pid):
                 p["desc"] = (data.get("desc") or "").strip()
             if "swatch" in data:
                 p["swatch"] = int(data.get("swatch") or 0) % 6
+            old_imgs = list(p.get("images") or [])
             if "images" in data:
                 images = sanitize_images(data.get("images"))
                 p["images"] = images
@@ -1027,6 +1403,7 @@ def admin_update_product(pid):
                 p["images"] = images
                 p["image"] = images[0] if images else None
             save_products(items)
+            purge_unused_images(set(old_imgs) - set(p.get("images") or []))
             return jsonify(p)
     abort(404, description="Товар не найден")
 
@@ -1039,7 +1416,9 @@ def admin_delete_product(pid):
     new_items = [p for p in items if p.get("id") != pid]
     if len(new_items) == len(items):
         abort(404, description="Товар не найден")
+    removed = next((p for p in items if p.get("id") == pid), {})
     save_products(new_items)
+    purge_unused_images(removed.get("images") or [])
     return jsonify({"ok": True})
 
 
@@ -1052,8 +1431,16 @@ def admin_upload():
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_IMAGE_EXT:
         abort(400, description="Недопустимый формат файла")
+    data, content_type, ext = prepare_image(file.read(), ext)
     filename = f"{uuid.uuid4().hex}{ext}"
-    file.save(os.path.join(UPLOAD_DIR, filename))
+    with DocSession() as db:
+        try:
+            db.add(StoredImage(filename=filename, content_type=content_type, data=data))
+            db.commit()
+        except Exception:
+            db.rollback()
+            log.exception("Не удалось сохранить фото в базе")
+            return jsonify({"error": "Не удалось сохранить фото"}), 500
     return jsonify({"url": f"/uploads/{filename}"}), 201
 
 
@@ -1066,6 +1453,7 @@ def admin_get_promos():
 
 
 @app.route("/api/admin/promos", methods=["POST"])
+@locked
 def admin_create_promo():
     require_admin()
     data = request.get_json(force=True, silent=True) or {}
@@ -1109,6 +1497,7 @@ def admin_create_promo():
 
 
 @app.route("/api/admin/promos/<int:pid>", methods=["PUT"])
+@locked
 def admin_update_promo(pid):
     require_admin()
     data = request.get_json(force=True, silent=True) or {}
@@ -1149,6 +1538,7 @@ def admin_update_promo(pid):
 
 
 @app.route("/api/admin/promos/<int:pid>", methods=["DELETE"])
+@locked
 def admin_delete_promo(pid):
     require_admin()
     promos = load_promos()
@@ -1181,6 +1571,17 @@ def admin_update_order_status(oid):
             prev = o.get("status")
             o["status"] = status
             # остатки следуют за статусом: отмена возвращает товар, «оживление» отменённого заказа списывает снова
+            # баллы следуют за статусом так же, как остатки
+            if status == "cancelled" and prev != "cancelled" and o.get("loyalty_applied"):
+                loyalty_revert(*order_loyalty_args(o))
+                o["loyalty_applied"] = False
+            elif (prev == "cancelled" and status != "cancelled" and o.get("customer_chat_id")
+                  and o.get("loyalty_applied") is False):
+                try:
+                    loyalty_apply(*order_loyalty_args(o))
+                except ValueError:
+                    abort(400, description="У клиента не хватает баллов, чтобы возобновить заказ")
+                o["loyalty_applied"] = True
             if status == "cancelled" and prev != "cancelled" and o.get("stock_deducted"):
                 shift_stock(o.get("items") or [], +1)
                 o["stock_deducted"] = False
@@ -1193,6 +1594,7 @@ def admin_update_order_status(oid):
 
 
 @app.route("/api/admin/orders/<int:oid>/message", methods=["POST"])
+@locked
 def admin_message_customer(oid):
     require_admin()
     data = request.get_json(force=True, silent=True) or {}
@@ -1236,6 +1638,7 @@ def admin_get_questions():
 
 
 @app.route("/api/admin/questions/<int:qid>/message", methods=["POST"])
+@locked
 def admin_message_question(qid):
     require_admin()
     data = request.get_json(force=True, silent=True) or {}

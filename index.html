@@ -952,6 +952,94 @@
   @media (prefers-reduced-motion:reduce){
     .rv-card,.rv-rate label{animation:none;transition-duration:.01s;}
   }
+
+  /* ---------- Баллы и кешбэк (палитра магазина: тёмная база, золото, огненный градиент) ---------- */
+  .loy-gem{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;color:var(--gold);
+    filter:drop-shadow(0 0 8px rgba(255,194,26,.45));}
+
+  /* компактный бейдж под шапкой */
+  .loy-pill{
+    display:none;align-items:center;gap:7px;margin:10px 18px 0;width:max-content;max-width:calc(100% - 36px);
+    padding:7px 12px 7px 9px;cursor:pointer;color:var(--text);
+    background:var(--bg-elev);border:1.5px solid rgba(255,194,26,.32);border-radius:12px;
+    font-family:var(--font-heading);font-weight:800;font-size:11.5px;letter-spacing:.03em;white-space:nowrap;
+    transition:transform .15s var(--ease),border-color .2s var(--ease),box-shadow .2s var(--ease);
+  }
+  .loy-pill.show{display:inline-flex;animation:fadeScaleIn .3s var(--ease) both;}
+  .loy-pill:hover{border-color:var(--gold);box-shadow:0 0 20px rgba(255,194,26,.22);}
+  .loy-pill:active{transform:scale(.95);}
+  .loy-pill b{color:var(--gold);font-weight:900;}
+  .loy-pill span span{color:var(--muted);font-weight:700;}
+
+  /* карточка в боковом меню — в стиле кнопки «Отзывы» */
+  .loy-menu{
+    display:none;align-items:center;gap:12px;margin:4px 14px 12px;padding:13px 16px;
+    background:linear-gradient(135deg,rgba(255,194,26,.12),rgba(255,138,30,.05));
+    border:1.5px solid rgba(255,194,26,.32);border-radius:16px;color:var(--text);
+  }
+  .loy-menu.show{display:flex;}
+  .loy-menu .loy-gem svg{width:22px;height:22px;}
+  .loy-menu-body{flex:1;min-width:0;}
+  .loy-menu-title{font-family:var(--font-body);font-size:15px;font-weight:600;}
+  .loy-menu-note{font-size:11.5px;line-height:1.45;color:var(--muted);margin-top:2px;}
+  .loy-chip{
+    flex:0 0 auto;padding:4px 10px;border-radius:10px;background:var(--gold);color:#1A1204;
+    font-family:var(--font-heading);font-size:12.5px;font-weight:900;white-space:nowrap;
+  }
+
+  /* блок списания в корзине */
+  .loy-block{
+    display:none;margin-top:16px;padding:14px;border-radius:16px;
+    background:linear-gradient(135deg,rgba(255,194,26,.10),rgba(255,138,30,.04)),var(--bg-elev);
+    border:1.5px solid rgba(255,194,26,.30);
+  }
+  .loy-block.show{display:block;animation:fadeScaleIn .3s var(--ease) both;}
+  .loy-head{display:flex;align-items:flex-start;gap:12px;}
+  .loy-head .loy-gem{margin-top:1px;}
+  .loy-info{flex:1;min-width:0;}
+  .loy-title{font-family:var(--font-heading);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-soft);}
+  .loy-avail{margin-top:5px;font-size:13px;line-height:1.5;color:var(--text);}
+  .loy-avail b{color:var(--gold);font-weight:800;}
+  .loy-sub{margin-top:3px;font-size:11.5px;line-height:1.45;color:var(--muted);}
+  .loy-row{
+    position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding-top:12px;
+    border-top:1px solid var(--line-soft);cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;
+  }
+  .loy-row.off{cursor:default;opacity:.55;}
+  .loy-label{font-family:var(--font-heading);font-size:13px;font-weight:800;color:var(--text);}
+  .loy-label b{color:var(--gold);font-weight:900;}
+  .loy-row input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;}
+  .loy-switch{
+    position:relative;flex:0 0 auto;width:50px;height:28px;border-radius:999px;
+    background:var(--bg);border:1.5px solid var(--line);transition:background .25s var(--ease),border-color .25s var(--ease),box-shadow .25s var(--ease);
+  }
+  .loy-switch::after{
+    content:"";position:absolute;top:2px;left:2px;width:21px;height:21px;border-radius:50%;
+    background:var(--muted-dim);box-shadow:0 2px 6px rgba(0,0,0,.45);transition:transform .25s var(--ease-spring),background .2s var(--ease);
+  }
+  .loy-row input:checked + .loy-switch{background:var(--grad);border-color:transparent;box-shadow:0 0 0 3px var(--accent-dim),0 4px 14px rgba(255,138,30,.35);}
+  .loy-row input:checked + .loy-switch::after{transform:translateX(22px);background:#fff;}
+  .loy-row input:focus-visible + .loy-switch{outline:2px solid var(--gold);outline-offset:3px;}
+
+  /* строки скидки и итоги */
+  .cart-subtotal.loy-line,.co-summary div.loy-line{color:var(--gold);font-weight:700;}
+  .co-summary div.loy-cb{color:var(--accent-soft);font-size:12px;}
+  .cart-total b,.co-summary div.tot b{display:inline-flex;align-items:baseline;transform-origin:right center;font-variant-numeric:tabular-nums;}
+  .cart-total b{text-shadow:0 0 22px rgba(255,194,26,.25);}
+  .cart-total b.flash,.co-summary div.tot b.flash{animation:loyFlash .6s var(--ease);}
+  @keyframes loyFlash{0%{transform:scale(1);}35%{transform:scale(1.07);text-shadow:0 0 20px rgba(255,194,26,.8);}100%{transform:scale(1);}}
+  .loy-old{
+    display:inline-block;max-width:0;opacity:0;margin-right:0;overflow:hidden;white-space:nowrap;
+    font-family:var(--font-heading);font-size:13px;font-weight:700;color:var(--muted-dim);
+    text-decoration:line-through;text-decoration-thickness:1.5px;
+    transition:max-width .35s var(--ease),opacity .25s var(--ease),margin .35s var(--ease);
+  }
+  .loy-old.show{max-width:160px;opacity:1;margin-right:10px;}
+  .success-loy{display:none;margin:12px 0 4px;padding:11px 13px;border-radius:12px;font-size:12.5px;line-height:1.6;color:var(--text);
+    background:rgba(255,194,26,.08);border:1.5px solid rgba(255,194,26,.3);text-align:center;}
+  .success-loy.show{display:block;}
+  .success-loy b{color:var(--gold);}
+  @media (prefers-reduced-motion:reduce){.loy-pill.show,.loy-block.show{animation:none;}.loy-switch,.loy-switch::after,.loy-old{transition:none;}.cart-total b.flash,.co-summary div.tot b.flash{animation:none;}}
 </style>
 </head>
 <body>
@@ -1018,6 +1106,10 @@
       </button>
     </div>
   </header>
+
+  <button class="loy-pill" id="loyPill" type="button" aria-label="Мои баллы">
+    <span class="loy-gem"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12l4 6-10 12L2 9l4-6Z"/><path d="M2 9h20M10 3 8 9l4 12 4-12-2-6"/></svg></span><span><b id="loyPillVal">0 баллов</b> <span id="loyPillRub">(0 ₽)</span></span>
+  </button>
 
   <div class="ticker-wrap">
     <div class="ticker" id="ticker"></div>
@@ -1280,6 +1372,14 @@
   </div>
 
   <nav class="sidebar-body">
+    <div class="loy-menu" id="loyMenu">
+      <span class="loy-gem"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12l4 6-10 12L2 9l4-6Z"/><path d="M2 9h20M10 3 8 9l4 12 4-12-2-6"/></svg></span>
+      <div class="loy-menu-body">
+        <div class="loy-menu-title">Мои баллы</div>
+        <div class="loy-menu-note" id="loyMenuNote"></div>
+      </div>
+      <span class="loy-chip" id="loyMenuVal">0 баллов</span>
+    </div>
     <div class="cat-nav" id="catList"></div>
 
     <div class="menu-reviews">
@@ -1326,9 +1426,26 @@
       </div>
     </div>
 
+    <div class="loy-block" id="loyBlock">
+      <div class="loy-head">
+        <span class="loy-gem"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12l4 6-10 12L2 9l4-6Z"/><path d="M2 9h20M10 3 8 9l4 12 4-12-2-6"/></svg></span>
+        <div class="loy-info">
+          <div class="loy-title">Баллы лояльности</div>
+          <div class="loy-avail" id="loyAvail"></div>
+          <div class="loy-sub" id="loySub"></div>
+        </div>
+      </div>
+      <label class="loy-row" id="loyRow">
+        <span class="loy-label" id="loyLabel">Списать баллы</span>
+        <input type="checkbox" id="loyToggle">
+        <span class="loy-switch" aria-hidden="true"></span>
+      </label>
+    </div>
+
     <div class="cart-subtotal" id="cartSubtotalRow" style="display:none;"><span>Сумма товаров</span><span id="cartSubtotal">0 ₽</span></div>
     <div class="cart-subtotal" id="cartDiscountRow" style="display:none;"><span>Скидка</span><span id="cartDiscount">0 ₽</span></div>
-    <div class="cart-total"><span>Итого</span><b id="cartTotal">0 ₽</b></div>
+    <div class="cart-subtotal loy-line" id="cartPointsRow" style="display:none;"><span>Скидка баллами</span><span id="cartPoints">−0 ₽</span></div>
+    <div class="cart-total"><span>Итого</span><b id="cartTotal"><s class="loy-old" id="cartOld"></s><span id="cartNew">0 ₽</span></b></div>
     <button class="btn-primary" id="checkoutBtn">Оформить заказ</button>
   </div>
 </div>
@@ -1379,7 +1496,9 @@
     <div class="co-summary" id="coSummary">
       <div><span>Товары</span><span id="coSumGoods">0 ₽</span></div>
       <div id="coSumDlvRow" style="display:none;"><span>Доставка</span><span id="coSumDlv">0 ₽</span></div>
-      <div class="tot"><span>Итого</span><b id="coSumTotal">0 ₽</b></div>
+      <div class="loy-line" id="coSumPtsRow" style="display:none;"><span>Скидка баллами</span><span id="coSumPts">−0 ₽</span></div>
+      <div class="tot"><span>Итого</span><b id="coSumTotal"><s class="loy-old" id="coOld"></s><span id="coNew">0 ₽</span></b></div>
+      <div class="loy-cb" id="coSumCbRow" style="display:none;"><span>Кешбэк за заказ</span><span id="coSumCb">+0 баллов</span></div>
     </div>
 
     <div class="form-error" id="coError"></div>
@@ -1399,6 +1518,7 @@
     </div>
     <div class="success-title">Заказ оформлен</div>
     <div class="success-sub">Мы свяжемся с вами в этом чате, чтобы подтвердить заказ и обсудить доставку.<br>Номер заказа: <span id="orderNo"></span></div>
+    <div class="success-loy" id="successLoy"></div>
     <button class="btn-secondary" data-close>Продолжить покупки</button>
   </div>
 </div>
@@ -1465,7 +1585,8 @@ const SWATCHES = [
 let DELIVERY_FEE = 200;
 let PICKUP_POINTS = ['Пролетарская','Девяткино','Мурино'];
 let SHOP_CONTACT = 'SHvape_manager'; // Telegram-аккаунт менеджера (без @); сервер может переопределить через SHOP_CONTACT
-const fmt = n => n.toLocaleString('ru-RU') + ' ₽';
+const fmt = n => (Number.isInteger(n) ? n.toLocaleString('ru-RU')
+  : n.toLocaleString('ru-RU', { minimumFractionDigits:2, maximumFractionDigits:2 })) + ' ₽';
 const BADGE_LABELS = { hit:'Хит', trend:'В тренде', sale:'Скидка', instock:'В наличии' };
 const priceHTML = p => (p.old_price && p.old_price > p.price)
   ? `<span class="price-old">${fmt(p.old_price)}</span><span class="price-new">${fmt(p.price)}</span>`
@@ -1478,6 +1599,98 @@ const media = p => slideBg(firstImage(p), p);
 let PRODUCTS = [];
 let cart = [];
 let appliedPromo = null; // { code, type, value }
+
+// --- баллы лояльности: 1 балл = 0,5 ₽ ---
+const LOYALTY = { maxPercent: 30, cashbackPercent: 5, pointValue: 0.5 };
+let loyaltyBalance = null;   // null — баланс неизвестен (не Telegram / ошибка сети)
+let usePoints = false;       // тумблер «Списать баллы»
+
+const round2 = n => Math.round(n * 100) / 100;
+const fmtPts = n => Number(n).toLocaleString('ru-RU');
+const ptsWord = n => {
+  const a = Math.abs(n) % 100, b = a % 10;
+  if (a > 10 && a < 20) return 'баллов';
+  if (b === 1) return 'балл';
+  if (b >= 2 && b <= 4) return 'балла';
+  return 'баллов';
+};
+const pts = n => `${fmtPts(n)} ${ptsWord(n)}`;
+
+// Лимит: скидка в рублях (баллы × 0,5) не больше maxPercent от суммы товаров goods (после промокода).
+function loyaltyCalc(goods){
+  const pv = LOYALTY.pointValue;
+  const balance = Number.isFinite(loyaltyBalance) ? Math.max(0, Math.floor(loyaltyBalance)) : 0;
+  const cap = Math.max(0, Math.floor(goods * LOYALTY.maxPercent / 100 / pv + 1e-9));
+  const avail = Math.max(0, Math.min(balance, cap));
+  const spend = (usePoints && avail > 0) ? avail : 0;
+  return { balance, cap, avail, spend,
+           balanceRub: round2(balance * pv), availRub: round2(avail * pv), spendRub: round2(spend * pv) };
+}
+
+// Кешбэк баллами: round((сумма_рублями × 5%) / 0,5), округление «half up» — как на сервере.
+const cashbackPoints = paid => Math.floor(paid * LOYALTY.cashbackPercent / 100 / LOYALTY.pointValue + 0.5 + 1e-9);
+
+// Плавный пересчёт суммы: число «докручивается» до нового значения, блок коротко подсвечивается.
+function tweenMoney(el, to, host){
+  const from = Number(el.dataset.v);
+  el.dataset.v = to;
+  cancelAnimationFrame(el._raf);
+  if (!Number.isFinite(from) || from === to || matchMedia('(prefers-reduced-motion: reduce)').matches){
+    el.textContent = fmt(to);
+    return;
+  }
+  if (host){ host.classList.remove('flash'); void host.offsetWidth; host.classList.add('flash'); }
+  const t0 = performance.now(), D = 380;
+  const step = now => {
+    const k = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - k, 3);
+    el.textContent = fmt(k < 1 ? Math.round(from + (to - from) * e) : to);
+    if (k < 1) el._raf = requestAnimationFrame(step);
+  };
+  el._raf = requestAnimationFrame(step);
+}
+
+// Итог: зачёркнутая прежняя сумма (если списаны баллы) + новая сумма.
+function setTotalDisplay(hostId, oldId, newId, before, after, showOld){
+  const oldEl = document.getElementById(oldId);
+  oldEl.textContent = fmt(before);
+  oldEl.classList.toggle('show', showOld);
+  tweenMoney(document.getElementById(newId), after, document.getElementById(hostId));
+}
+
+function renderLoyaltyBadges(){
+  const known = Number.isFinite(loyaltyBalance);
+  const b = known ? Math.floor(loyaltyBalance) : 0;
+  const rub = fmt(round2(b * LOYALTY.pointValue));
+  const pill = document.getElementById('loyPill');
+  const menu = document.getElementById('loyMenu');
+  if (pill){
+    pill.classList.toggle('show', known);
+    document.getElementById('loyPillVal').textContent = pts(b);
+    document.getElementById('loyPillRub').textContent = `(${rub})`;
+  }
+  if (menu){
+    menu.classList.toggle('show', known);
+    document.getElementById('loyMenuVal').textContent = pts(b);
+    document.getElementById('loyMenuNote').textContent =
+      `≈ ${rub} · 1 балл = ${LOYALTY.pointValue.toLocaleString('ru-RU')} ₽. Кешбэк ${LOYALTY.cashbackPercent}% баллами, оплата баллами до ${LOYALTY.maxPercent}% заказа.`;
+  }
+}
+
+async function loadLoyalty(){
+  const user = tg?.initDataUnsafe?.user;
+  if (!user?.id){ loyaltyBalance = null; renderLoyaltyBadges(); return; }
+  try {
+    const res = await fetch(`/api/loyalty/balance?telegram_id=${encodeURIComponent(user.id)}`);
+    if (!res.ok) throw new Error('loyalty');
+    const data = await res.json();
+    loyaltyBalance = Number(data.points_balance);
+    if (!Number.isFinite(loyaltyBalance)) loyaltyBalance = null;
+  } catch(e){
+    loyaltyBalance = null;
+  }
+  renderLoyaltyBadges();
+  if (typeof updateCartTotals === 'function') updateCartTotals();
+}
 let promoFormOpen = false;
 let activeCategory = 'Все';
 let activeSub = 'Все';
@@ -2108,13 +2321,35 @@ function computePromoDiscount(promo, subtotal){
 function updateCartTotals(){
   const subtotal = cartSubtotal();
   const discount = appliedPromo ? computePromoDiscount(appliedPromo, subtotal) : 0;
-  const total = subtotal - discount;
+  const goods = subtotal - discount;
+  const loy = loyaltyCalc(goods);
+  const total = round2(goods - loy.spendRub);
 
-  document.getElementById('cartSubtotalRow').style.display = discount > 0 ? 'flex' : 'none';
+  document.getElementById('cartSubtotalRow').style.display = (discount > 0 || loy.spend > 0) ? 'flex' : 'none';
   document.getElementById('cartSubtotal').textContent = fmt(subtotal);
   document.getElementById('cartDiscountRow').style.display = discount > 0 ? 'flex' : 'none';
   document.getElementById('cartDiscount').textContent = '−' + fmt(discount);
-  document.getElementById('cartTotal').textContent = fmt(total);
+  document.getElementById('cartPointsRow').style.display = loy.spend > 0 ? 'flex' : 'none';
+  document.getElementById('cartPoints').textContent = '−' + fmt(loy.spendRub);
+  setTotalDisplay('cartTotal', 'cartOld', 'cartNew', goods, total, loy.spend > 0);
+
+  // блок программы лояльности
+  const block = document.getElementById('loyBlock');
+  const showBlock = Number.isFinite(loyaltyBalance) && cart.length > 0;
+  block.classList.toggle('show', showBlock);
+  if (showBlock){
+    const toggle = document.getElementById('loyToggle');
+    document.getElementById('loyAvail').innerHTML =
+      `Доступно: <b>${pts(loy.avail)}</b> | Скидка: до ${LOYALTY.maxPercent}% (−<b>${fmt(loy.availRub)}</b>)`;
+    document.getElementById('loySub').textContent =
+      `На балансе: ${pts(loy.balance)} (${fmt(loy.balanceRub)}) · 1 балл = ${LOYALTY.pointValue.toLocaleString('ru-RU')} ₽`;
+    toggle.disabled = loy.avail <= 0;
+    toggle.checked = loy.spend > 0;
+    document.getElementById('loyRow').classList.toggle('off', loy.avail <= 0);
+    document.getElementById('loyLabel').innerHTML = loy.avail > 0
+      ? `Списать <b>${pts(loy.avail)}</b>`
+      : 'Списывать пока нечего';
+  }
   if (typeof coState !== 'undefined' && coState && document.getElementById('coSumTotal')) updateCheckoutSummary();
 
   const toggle = document.getElementById('promoToggle');
@@ -2197,7 +2432,15 @@ document.getElementById('promoRemoveBtn').onclick = () => {
   document.getElementById('promoError').textContent = '';
   updateCartTotals();
 };
-document.getElementById('bagBtn').onclick = () => { renderCart(); openSheet('cartSheet'); };
+document.getElementById('loyToggle').addEventListener('change', e => {
+  usePoints = e.target.checked;
+  updateCartTotals();
+  if (tg) tg.HapticFeedback?.selectionChanged?.();
+});
+document.getElementById('loyPill').onclick = () => {
+  showToast(`1 балл = ${LOYALTY.pointValue.toLocaleString('ru-RU')} ₽ · кешбэк ${LOYALTY.cashbackPercent}% баллами · баллами можно оплатить до ${LOYALTY.maxPercent}% заказа`, 'success');
+};
+document.getElementById('bagBtn').onclick = () => { renderCart(); loadLoyalty(); openSheet('cartSheet'); };
 
 document.getElementById('favBtn').onclick = () => { renderFavorites(); openSheet('favSheet'); };
 document.getElementById('profileBtn').onclick = () => { openSheet('profileSheet'); renderProfile(); };
@@ -2396,7 +2639,11 @@ function checkoutTotal(){
   const subtotal = cartSubtotal();
   const discount = appliedPromo ? computePromoDiscount(appliedPromo, subtotal) : 0;
   const fee = coState.mode === 'delivery' ? DELIVERY_FEE : 0;
-  return { subtotal, discount, fee, total: subtotal - discount + fee };
+  const goods = subtotal - discount;
+  const loy = loyaltyCalc(goods);
+  const total = round2(goods - loy.spendRub + fee);
+  const cashback = Number.isFinite(loyaltyBalance) ? cashbackPoints(total) : 0;   // баллы за сумму, оплаченную рублями
+  return { subtotal, discount, fee, points: loy.spend, pointsRub: loy.spendRub, cashback, total };
 }
 
 function updateCheckoutSummary(){
@@ -2404,7 +2651,11 @@ function updateCheckoutSummary(){
   document.getElementById('coSumGoods').textContent = fmt(s.subtotal - s.discount);
   document.getElementById('coSumDlvRow').style.display = s.fee ? 'flex' : 'none';
   document.getElementById('coSumDlv').textContent = fmt(s.fee);
-  document.getElementById('coSumTotal').textContent = fmt(s.total);
+  document.getElementById('coSumPtsRow').style.display = s.points ? 'flex' : 'none';
+  document.getElementById('coSumPts').textContent = '−' + fmt(s.pointsRub);
+  setTotalDisplay('coSumTotal', 'coOld', 'coNew', round2(s.subtotal - s.discount + s.fee), s.total, s.points > 0);
+  document.getElementById('coSumCbRow').style.display = s.cashback > 0 ? 'flex' : 'none';
+  document.getElementById('coSumCb').textContent = `+${pts(s.cashback)} (${fmt(round2(s.cashback * LOYALTY.pointValue))})`;
 }
 
 function renderCheckoutOpts(){
@@ -2504,6 +2755,7 @@ async function submitOrder(){
       time: coState.when === 'time' ? timeEl.value : null,
     },
     promo_code: appliedPromo ? appliedPromo.code : undefined,
+    points_to_spend: loyaltyCalc(subtotal - discount).spend,   // сколько баллов списать (0, если тумблер выключен)
     tg_user: tgUser ? { id: tgUser.id, username: tgUser.username } : null,
   };
 
@@ -2519,6 +2771,19 @@ async function submitOrder(){
     }
     const data = await res.json();
     document.getElementById('orderNo').textContent = 'SH-' + data.order_id;
+    const loyBox = document.getElementById('successLoy');
+    if (Number.isFinite(data.points_balance)){
+      loyaltyBalance = data.points_balance;
+      loyBox.innerHTML = `${data.points_spent > 0 ? `Оплачено баллами: <b>${pts(data.points_spent)}</b> (${fmt(data.points_discount || 0)})<br>` : ''}`
+        + `Начислено кешбэка: <b>+${pts(data.cashback || 0)}</b><br>`
+        + `Баланс: <b>${pts(data.points_balance)}</b> (${fmt(round2(data.points_balance * LOYALTY.pointValue))})`;
+      loyBox.classList.add('show');
+    } else {
+      loyBox.classList.remove('show');
+      loadLoyalty();
+    }
+    usePoints = false;
+    renderLoyaltyBadges();
     refreshProducts(true);
     cart = [];
     appliedPromo = null;
@@ -2536,6 +2801,7 @@ async function submitOrder(){
     showToast(e.message, 'error');
     if (tg) tg.HapticFeedback?.notificationOccurred('error');
     refreshProducts(true);
+    loadLoyalty();
   } finally {
     btn.disabled = false;
     btn.textContent = 'Подтвердить заказ';
@@ -2604,8 +2870,17 @@ fetch('/api/config').then(r => r.ok ? r.json() : null).then(c => {
   if (c && c.contact){ SHOP_CONTACT = c.contact; footContact.textContent = '@' + SHOP_CONTACT; }
   if (c && Number.isFinite(c.delivery_fee)) DELIVERY_FEE = c.delivery_fee;
   if (c && Array.isArray(c.pickup_points) && c.pickup_points.length) PICKUP_POINTS = c.pickup_points;
+  if (c && Number.isFinite(c.max_points_percent)) LOYALTY.maxPercent = c.max_points_percent;
+  if (c && Number.isFinite(c.cashback_percent)) LOYALTY.cashbackPercent = c.cashback_percent;
+  if (c && Number.isFinite(c.point_value) && c.point_value > 0) LOYALTY.pointValue = c.point_value;
+  renderLoyaltyBadges();
   renderCheckoutOpts();
+  updateCartTotals();
 }).catch(() => {});
+
+// --- баланс баллов: при открытии и при возврате в приложение ---
+loadLoyalty();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) loadLoyalty(); });
 
 // --- 18+ ---
 (function ageGate(){

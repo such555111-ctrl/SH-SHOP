@@ -443,6 +443,7 @@
     <button class="tab-btn active" data-tab="products">Товары</button>
     <button class="tab-btn" data-tab="orders">Заказы<span class="tab-badge" id="ordersBadge" style="display:none;"></span></button>
     <button class="tab-btn" data-tab="questions">Вопросы<span class="tab-badge" id="questionsBadge" style="display:none;"></span></button>
+    <button class="tab-btn" data-tab="reviews">Отзывы<span class="tab-badge" id="reviewsBadge" style="display:none;"></span></button>
     <button class="tab-btn" data-tab="promos">Промокоды</button>
   </div>
   <div class="muted" id="countLabel"></div>
@@ -579,6 +580,7 @@ let pwd = localStorage.getItem('sh_admin_pwd') || '';
 let products = [];
 let orders = [];
 let questions = [];
+let reviews = [];
 let promos = [];
 let currentTab = 'products';
 let editingId = null;
@@ -655,10 +657,11 @@ async function enterApp(){
   await loadProducts();
   await loadOrders();
   await loadQuestions();
+  await loadReviews();
   await loadPromos();
 }
 
-const TAB_TITLES = { products:'Товары', orders:'Заказы', questions:'Вопросы', promos:'Промокоды' };
+const TAB_TITLES = { products:'Товары', orders:'Заказы', questions:'Вопросы', reviews:'Отзывы', promos:'Промокоды' };
 
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.onclick = async () => {
@@ -676,6 +679,9 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     } else if (currentTab === 'questions'){
       await loadQuestions();
       renderQuestions();
+    } else if (currentTab === 'reviews'){
+      await loadReviews();
+      renderReviews();
     } else {
       await loadPromos();
       renderPromos();
@@ -969,6 +975,76 @@ async function sendQuestionMessage(id){
   } catch(e){
     showToast(e.message);
     input.disabled = false;
+  }
+}
+
+// --- Reviews -------------------------------------------------------
+
+function escR(str){
+  return String(str == null ? '' : str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function refreshReviewsBadge(){
+  const badge = document.getElementById('reviewsBadge');
+  const pending = reviews.filter(r => !r.is_approved).length;
+  if (pending > 0){ badge.style.display = 'inline-block'; badge.textContent = pending; }
+  else badge.style.display = 'none';
+}
+
+async function loadReviews(){
+  try {
+    reviews = await api('/api/admin/reviews');
+  } catch(e){
+    reviews = [];
+    showToast(e.message);
+  }
+  refreshReviewsBadge();
+}
+
+function renderReviews(){
+  const pending = reviews.filter(r => !r.is_approved).length;
+  document.getElementById('countLabel').textContent =
+    `${reviews.length} отзыв(ов)` + (pending ? ` · на модерации: ${pending}` : '');
+  const list = document.getElementById('list');
+  if (reviews.length === 0){
+    list.innerHTML = '<div class="empty">Пока нет отзывов от покупателей.</div>';
+    return;
+  }
+  list.innerHTML = reviews.map(r => {
+    const stars = '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating);
+    return `
+    <div class="order-card">
+      <div class="order-head">
+        <div>
+          <div class="order-id">${escR(r.author_name)}</div>
+          <div class="order-date">${new Date(r.created_at).toLocaleString('ru-RU')} · ID ${escR(r.telegram_id)}</div>
+        </div>
+        <span class="status-badge status-${r.is_approved ? 'done' : 'new'}">${r.is_approved ? 'Опубликован' : 'На модерации'}</span>
+      </div>
+      <div class="order-items"><span style="color:var(--gold);letter-spacing:.12em;">${stars}</span> (${r.rating}/5)</div>
+      <div class="order-comment" style="white-space:pre-wrap;overflow-wrap:anywhere;">${escR(r.text)}</div>
+      <div class="card-actions" style="margin-top:12px;">
+        <button class="btn-danger" data-review-del="${r.id}">Удалить</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('[data-review-del]').forEach(btn => {
+    btn.onclick = () => deleteReview(Number(btn.dataset.reviewDel));
+  });
+}
+
+async function deleteReview(id){
+  const r = reviews.find(x => x.id === id);
+  if (!confirm(`Удалить отзыв${r ? ' от «' + r.author_name + '»' : ''}?`)) return;
+  try {
+    await api(`/api/admin/reviews/${id}`, { method:'DELETE' });
+    reviews = reviews.filter(x => x.id !== id);
+    refreshReviewsBadge();
+    renderReviews();
+    showToast('Отзыв удалён');
+  } catch(e){
+    showToast(e.message);
   }
 }
 
