@@ -2,6 +2,8 @@ import os
 import json
 import uuid
 import logging
+import threading
+import functools
 from datetime import datetime, timezone
 
 from flask import Flask, request, send_from_directory, abort, jsonify
@@ -61,6 +63,19 @@ app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 8 МБ на файл
 
 
 # --- Вспомогательные функции для товаров и авторизации админа -----------
+
+# Данные лежат в json-файлах, а gunicorn работает в нескольких потоках —
+# блокировка не даёт двум запросам одновременно списать/перезаписать остатки.
+DATA_LOCK = threading.RLock()
+
+
+def locked(fn):
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with DATA_LOCK:
+            return fn(*args, **kwargs)
+    return wrapper
+
 
 def require_admin():
     if not ADMIN_PASSWORD:
@@ -133,6 +148,69 @@ def sanitize_images(raw):
 def sanitize_badge(raw):
     b = str(raw or "").strip().lower()
     return b if b in ALLOWED_BADGES else None
+
+
+def sanitize_stock(raw):
+    """Остаток на складе: целое >= 0 либо None (None = учёт не ведётся, товар без ограничений)."""
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return None
+    try:
+        v = int(float(raw))
+    except (TypeError, ValueError):
+        return None
+    return max(0, min(v, 1_000_000))
+
+
+def qty_by_product(items):
+    """Суммарное количество по id товара (один товар может быть в корзине с разными вкусами)."""
+    totals = {}
+    for i in items:
+        try:
+            pid = int(i.get("id"))
+            qty = int(i.get("qty") or 1)
+        except (TypeError, ValueError, AttributeError):
+            continue
+        totals[pid] = totals.get(pid, 0) + qty
+    return totals
+
+
+def reserve_stock(items):
+    """Проверяет остатки и списывает их. Возвращает текст ошибки либо None. Вызывать под DATA_LOCK."""
+    totals = qty_by_product(items)
+    products_list = load_products()
+    by_id = {p.get("id"): p for p in products_list}
+    for pid, qty in totals.items():
+        p = by_id.get(pid)
+        if not p or p.get("stock") is None:
+            continue
+        have = int(p["stock"])
+        if have <= 0:
+            return f"«{p.get('name')}» — нет в наличии"
+        if qty > have:
+            return f"«{p.get('name')}» — доступно только {have} шт."
+    changed = False
+    for pid, qty in totals.items():
+        p = by_id.get(pid)
+        if p and p.get("stock") is not None:
+            p["stock"] = max(0, int(p["stock"]) - qty)
+            changed = True
+    if changed:
+        save_products(products_list)
+    return None
+
+
+def shift_stock(items, sign):
+    """Возвращает (sign=+1) или снова списывает (sign=-1, не ниже нуля) остатки по позициям заказа."""
+    totals = qty_by_product(items)
+    products_list = load_products()
+    changed = False
+    for p in products_list:
+        qty = totals.get(p.get("id"))
+        if qty and p.get("stock") is not None:
+            p["stock"] = max(0, int(p["stock"]) + sign * qty)
+            changed = True
+    if changed:
+        save_products(products_list)
 
 
 def sanitize_old_price(raw):
@@ -335,6 +413,7 @@ def delivery_text(d):
 
 
 @app.route("/api/order", methods=["POST"])
+@locked
 def create_order():
     data = request.get_json(force=True, silent=True) or {}
 
@@ -347,6 +426,16 @@ def create_order():
         abort(400, description="Укажите имя и телефон")
     if not isinstance(items, list) or not items:
         abort(400, description="Корзина пуста")
+    for it in items:
+        try:
+            if not isinstance(it, dict) or int(it.get("qty") or 1) < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            abort(400, description="Некорректное количество товара")
+
+    stock_err = reserve_stock(items)
+    if stock_err:
+        abort(400, description=stock_err)
 
     delivery, delivery_err = parse_delivery(data.get("delivery"))
     if delivery_err:
@@ -390,6 +479,7 @@ def create_order():
         "customer_chat_id": customer_chat_id,
         "customer_username": customer_username,
         "status": "new",
+        "stock_deducted": True,
         "messages": [],
     }
     orders.append(order)
@@ -503,6 +593,7 @@ def customer_orders():
 
 
 @app.route("/api/orders/<int:oid>/cancel", methods=["POST"])
+@locked
 def customer_cancel_order(oid):
     """Покупатель отменяет свой заказ, если он ещё не взят в обработку."""
     data = request.get_json(force=True, silent=True) or {}
@@ -521,6 +612,9 @@ def customer_cancel_order(oid):
         abort(400, description="Заказ уже в обработке — отмена недоступна")
 
     order["status"] = "cancelled"
+    if order.get("stock_deducted"):
+        shift_stock(order.get("items") or [], +1)   # отменённый заказ возвращает товар на склад
+        order["stock_deducted"] = False
     save_orders(orders)
 
     for admin_id in ADMIN_CHAT_IDS:
@@ -627,6 +721,7 @@ def admin_get_products():
 
 
 @app.route("/api/admin/products", methods=["POST"])
+@locked
 def admin_create_product():
     require_admin()
     data = request.get_json(force=True, silent=True) or {}
@@ -652,6 +747,7 @@ def admin_create_product():
         "desc": (data.get("desc") or "").strip(),
         "images": images,
         "image": images[0] if images else None,
+        "stock": sanitize_stock(data.get("stock")),
     }
     items.append(product)
     save_products(items)
@@ -659,6 +755,7 @@ def admin_create_product():
 
 
 @app.route("/api/admin/products/<int:pid>", methods=["PUT"])
+@locked
 def admin_update_product(pid):
     require_admin()
     data = request.get_json(force=True, silent=True) or {}
@@ -683,6 +780,8 @@ def admin_update_product(pid):
             if "sizes" in data:
                 sizes_raw = data.get("sizes", "")
                 p["sizes"] = [s.strip() for s in sizes_raw.split(",") if s.strip()] if isinstance(sizes_raw, str) else (sizes_raw or p["sizes"])
+            if "stock" in data:
+                p["stock"] = sanitize_stock(data.get("stock"))
             if "desc" in data:
                 p["desc"] = (data.get("desc") or "").strip()
             if "swatch" in data:
@@ -701,6 +800,7 @@ def admin_update_product(pid):
 
 
 @app.route("/api/admin/products/<int:pid>", methods=["DELETE"])
+@locked
 def admin_delete_product(pid):
     require_admin()
     items = load_products()
@@ -836,6 +936,7 @@ def admin_get_orders():
 
 
 @app.route("/api/admin/orders/<int:oid>/status", methods=["PUT"])
+@locked
 def admin_update_order_status(oid):
     require_admin()
     data = request.get_json(force=True, silent=True) or {}
@@ -845,7 +946,15 @@ def admin_update_order_status(oid):
     orders = load_orders()
     for o in orders:
         if o.get("id") == oid:
+            prev = o.get("status")
             o["status"] = status
+            # остатки следуют за статусом: отмена возвращает товар, «оживление» отменённого заказа списывает снова
+            if status == "cancelled" and prev != "cancelled" and o.get("stock_deducted"):
+                shift_stock(o.get("items") or [], +1)
+                o["stock_deducted"] = False
+            elif prev == "cancelled" and status != "cancelled" and o.get("stock_deducted") is False:
+                shift_stock(o.get("items") or [], -1)
+                o["stock_deducted"] = True
             save_orders(orders)
             return jsonify(o)
     abort(404, description="Заказ не найден")
