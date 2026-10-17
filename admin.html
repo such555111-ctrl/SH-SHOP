@@ -338,28 +338,62 @@
 
   .reveal{opacity:0;transform:translateY(16px);transition:all .5s var(--ease);}
   .reveal.visible{opacity:1;transform:translateY(0);}
+
+  /* ---------- анимация логотипа SH SHOP ---------- */
+  .sh-float{animation:shFloat 4.2s ease-in-out infinite;}
+  @keyframes shFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-2.5px);}}
+  .sh-puff{transform-box:fill-box;transform-origin:center;animation:shPuff 5s ease-in-out infinite;}
+  @keyframes shPuff{0%,100%{transform:translateY(0) scale(1);opacity:.7;}50%{transform:translateY(-5px) scale(1.15);opacity:1;}}
+  .sh-glowp{animation:shGlow 3s ease-in-out infinite;}
+  @keyframes shGlow{0%,100%{opacity:.4;}50%{opacity:.95;}}
+  .sh-bolt{animation:shBolt 3.4s infinite;}
+  @keyframes shBolt{0%,84%,100%{opacity:.25;}86%{opacity:1;}88%{opacity:.3;}90%{opacity:1;}95%{opacity:.5;}}
+  .sh-ember{transform-box:fill-box;transform-origin:center;animation:shEmber 3s ease-in infinite;opacity:0;}
+  @keyframes shEmber{0%{transform:translateY(6px) scale(.4);opacity:0;}20%{opacity:1;}100%{transform:translateY(-26px) scale(1);opacity:0;}}
+  .sh-shine{animation:shShine 4s ease-in-out infinite;}
+  @keyframes shShine{0%,45%{transform:translateX(0);}100%{transform:translateX(230px);}}
+  .sh-spark{transform-box:fill-box;transform-origin:center;animation:shSpark 2.6s ease-in-out infinite;opacity:0;}
+  @keyframes shSpark{0%,100%{transform:scale(0) rotate(0);opacity:0;}50%{transform:scale(1) rotate(90deg);opacity:1;}}
+  .sh-crown{transform-box:fill-box;transform-origin:50% 100%;animation:shCrown 3.6s ease-in-out infinite;}
+  @keyframes shCrown{0%,100%{transform:translateY(0) rotate(0);}50%{transform:translateY(-2px) rotate(-2.5deg);}}
+  @keyframes logoPop{0%{transform:scale(.55) rotate(-5deg);opacity:0;}60%{transform:scale(1.06) rotate(1deg);opacity:1;}100%{transform:scale(1) rotate(0);}}
+  @media (prefers-reduced-motion:reduce){.sh-float,.sh-puff,.sh-glowp,.sh-bolt,.sh-ember,.sh-shine,.sh-spark,.sh-crown{animation:none!important;}.sh-shine{display:none;}}
 </style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs><linearGradient id="sh-gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF2A8"/><stop offset=".42" stop-color="#FFC21A"/><stop offset="1" stop-color="#FF6A00"/></linearGradient>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs><linearGradient id="sh-gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF6B8"/><stop offset=".3" stop-color="#FFCB2B"/><stop offset=".55" stop-color="#FF9A10"/><stop offset=".78" stop-color="#FF7000"/><stop offset="1" stop-color="#E24A00"/></linearGradient>
 <radialGradient id="sh-smoke" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".95"/><stop offset=".6" stop-color="#C9DAFF" stop-opacity=".55"/><stop offset="1" stop-color="#8FB4FF" stop-opacity="0"/></radialGradient>
-<radialGradient id="sh-glow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#2F7BFF" stop-opacity=".6"/><stop offset="1" stop-color="#2F7BFF" stop-opacity="0"/></radialGradient>
+<radialGradient id="sh-glow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#2F7BFF" stop-opacity=".65"/><stop offset="1" stop-color="#2F7BFF" stop-opacity="0"/></radialGradient>
+<filter id="sh-blur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1.4"/></filter>
 <path id="sh-big" d="M118 52C114 40 102 36 90 36C72 36 64 45 64 55C64 67 76 70 90 72C106 74 118 78 118 90C118 101 108 106 92 106C76 106 66 100 62 88M142 36V106M142 71H194M194 36V106"/>
-<path id="sh-small" d="M104 122C101 118 98 118 95 118C89 118 86 121 86 124C86 128 90 129 95 129C100 130 104 131 104 135C104 139 100 140 95 140C90 140 87 139 85 135M115 118V140M115 129H133M133 118V140M153 118C160 118 162 123 162 129C162 135 160 140 153 140C146 140 144 135 144 129C144 123 146 118 153 118ZM173 140V118H182C189 118 191 121 191 125C191 129 189 132 182 132H173"/></defs><symbol id="sh-logo" viewBox="0 0 276 154" fill="none"><ellipse cx="138" cy="74" rx="132" ry="60" fill="url(#sh-glow)"/>
-<g fill="url(#sh-smoke)" opacity=".9"><circle cx="34" cy="96" r="17"/><circle cx="54" cy="110" r="14"/><circle cx="22" cy="78" r="10"/><circle cx="70" cy="122" r="11"/><circle cx="62" cy="38" r="9"/><circle cx="242" cy="96" r="17"/><circle cx="222" cy="110" r="14"/><circle cx="254" cy="78" r="10"/><circle cx="206" cy="122" r="11"/><circle cx="214" cy="38" r="9"/></g>
-<g transform="translate(20 0) skewX(-8)" stroke-linecap="round" stroke-linejoin="round" fill="none">
-<use href="#sh-big" stroke="#2F7BFF" stroke-width="27" opacity=".55"/>
-<use href="#sh-big" stroke="#07080F" stroke-width="22"/>
+<path id="sh-small" d="M104 122C101 118 98 118 95 118C89 118 86 121 86 124C86 128 90 129 95 129C100 130 104 131 104 135C104 139 100 140 95 140C90 140 87 139 85 135M115 118V140M115 129H133M133 118V140M153 118C160 118 162 123 162 129C162 135 160 140 153 140C146 140 144 135 144 129C144 123 146 118 153 118ZM173 140V118H182C189 118 191 121 191 125C191 129 189 132 182 132H173"/>
+<path id="sh-bolt" d="M10 0L0 22H8L2 46L22 16H13L20 0Z"/>
+<mask id="sh-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="276" height="154"><g transform="translate(20 0) skewX(-8)" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#sh-big" stroke="#fff" stroke-width="14"/></g></mask></defs><symbol id="sh-logo" viewBox="0 0 276 154" fill="none"><ellipse class="sh-glowp" cx="138" cy="74" rx="132" ry="60" fill="url(#sh-glow)"/>
+<g class="sh-puff" style="animation-delay:0s" filter="url(#sh-blur)" fill="url(#sh-smoke)"><circle cx="40" cy="92" r="16"/><circle cx="52.8" cy="96.8" r="12.0"/><circle cx="28.8" cy="98.4" r="10.4"/></g><g class="sh-puff" style="animation-delay:-1.5s" filter="url(#sh-blur)" fill="url(#sh-smoke)"><circle cx="30" cy="112" r="11"/><circle cx="38.8" cy="115.3" r="8.2"/><circle cx="22.3" cy="116.4" r="7.2"/></g><g class="sh-puff" style="animation-delay:-2.5s" filter="url(#sh-blur)" fill="url(#sh-smoke)"><circle cx="70" cy="124" r="12"/><circle cx="79.6" cy="127.6" r="9.0"/><circle cx="61.6" cy="128.8" r="7.8"/></g><g class="sh-puff" style="animation-delay:-1s" filter="url(#sh-blur)" fill="url(#sh-smoke)"><circle cx="236" cy="92" r="16"/><circle cx="248.8" cy="96.8" r="12.0"/><circle cx="224.8" cy="98.4" r="10.4"/></g><g class="sh-puff" style="animation-delay:-3s" filter="url(#sh-blur)" fill="url(#sh-smoke)"><circle cx="246" cy="112" r="11"/><circle cx="254.8" cy="115.3" r="8.2"/><circle cx="238.3" cy="116.4" r="7.2"/></g><g class="sh-puff" style="animation-delay:-2s" filter="url(#sh-blur)" fill="url(#sh-smoke)"><circle cx="206" cy="124" r="12"/><circle cx="215.6" cy="127.6" r="9.0"/><circle cx="197.6" cy="128.8" r="7.8"/></g><g class="sh-puff" style="animation-delay:-0.5s" filter="url(#sh-blur)" fill="url(#sh-smoke)"><circle cx="58" cy="40" r="10"/><circle cx="66.0" cy="43.0" r="7.5"/><circle cx="51.0" cy="44.0" r="6.5"/></g><g class="sh-puff" style="animation-delay:-2.2s" filter="url(#sh-blur)" fill="url(#sh-smoke)"><circle cx="218" cy="40" r="10"/><circle cx="226.0" cy="43.0" r="7.5"/><circle cx="211.0" cy="44.0" r="6.5"/></g>
+<g class="sh-bolt" style="animation-delay:-.4s"><use href="#sh-bolt" transform="translate(16 30) rotate(-6)" fill="#4D9BFF" stroke="#CFE4FF" stroke-width="1.4" stroke-linejoin="round"/></g>
+<g class="sh-bolt" style="animation-delay:-1.9s"><use href="#sh-bolt" transform="translate(260 30) scale(-1 1) rotate(-6)" fill="#4D9BFF" stroke="#CFE4FF" stroke-width="1.4" stroke-linejoin="round"/></g>
+<g class="sh-float"><g transform="translate(20 0) skewX(-8)" stroke-linecap="round" stroke-linejoin="round" fill="none">
+<use href="#sh-big" class="sh-glowp" stroke="#2F7BFF" stroke-width="28" opacity=".55"/>
+<use href="#sh-big" stroke="#07080F" stroke-width="23"/>
+<use href="#sh-big" transform="translate(1.5 3)" stroke="#8A2E00" stroke-width="14"/>
 <use href="#sh-big" stroke="url(#sh-gold)" stroke-width="14"/>
-<use href="#sh-big" transform="translate(-1.6 -2)" stroke="#FFFBE0" stroke-width="3" opacity=".65"/>
+<use href="#sh-big" transform="translate(-1.8 -2.2)" stroke="#FFFBE0" stroke-width="3" opacity=".7"/>
 <use href="#sh-small" stroke="#07080F" stroke-width="9"/>
 <use href="#sh-small" stroke="#FFFFFF" stroke-width="4.4"/>
 </g>
+<!--SHINE--><g mask="url(#sh-mask)"><g transform="skewX(-20)"><rect class="sh-shine" x="10" y="20" width="20" height="100" fill="#FFFFFF" opacity=".85"/></g></g><!--/SHINE-->
+</g>
+<g fill="#FFD84A"><circle class="sh-ember" cx="86" cy="34" r="1.8"/><circle class="sh-ember" style="animation-delay:-.9s" cx="122" cy="30" r="1.5"/><circle class="sh-ember" style="animation-delay:-1.7s" cx="160" cy="30" r="1.8"/><circle class="sh-ember" style="animation-delay:-2.3s" cx="192" cy="36" r="1.5"/><circle class="sh-ember" style="animation-delay:-1.2s" cx="104" cy="44" r="1.2"/></g>
 <g stroke="url(#sh-gold)" stroke-width="3" stroke-linecap="round"><path d="M24 130H64"/><path d="M220 130H254"/></g>
-<g fill="#FFC21A"><path d="M70 130l4-4 4 4-4 4z"/><path d="M208 130l4-4 4 4-4 4z"/></g>
+<g fill="#FFC21A"><path class="sh-spark" style="animation-delay:-.6s;opacity:1" d="M70 130l4-4 4 4-4 4z"/><path class="sh-spark" style="animation-delay:-1.6s;opacity:1" d="M208 130l4-4 4 4-4 4z"/></g>
+<g class="sh-crown">
 <path d="M108 26L112 8L125 18L138 3L151 18L164 8L168 26Z" fill="#07080F" stroke="#07080F" stroke-width="9" stroke-linejoin="round"/>
 <path d="M108 26L112 8L125 18L138 3L151 18L164 8L168 26Z" fill="url(#sh-gold)" stroke="#FFF2A8" stroke-width="2.2" stroke-linejoin="round"/>
-<g fill="#FFF2A8"><circle cx="112" cy="7" r="3"/><circle cx="138" cy="2.5" r="3.2"/><circle cx="164" cy="7" r="3"/></g></symbol></svg>
+<path d="M112 22H164" stroke="#FFF2A8" stroke-width="1.4" opacity=".8"/>
+<g fill="#FFF2A8"><circle cx="112" cy="7" r="3"/><circle cx="138" cy="2.5" r="3.2"/><circle cx="164" cy="7" r="3"/></g>
+<circle cx="138" cy="15" r="2.6" fill="#2F7BFF" stroke="#CFE4FF" stroke-width="1"/>
+</g>
+<g transform="translate(94 14) scale(1.1)"><path class="sh-spark" style="animation-delay:0s" d="M0-6Q1-1 6 0Q1 1 0 6Q-1 1-6 0Q-1-1 0-6Z" fill="#FFFFFF"/></g><g transform="translate(184 12) scale(1)"><path class="sh-spark" style="animation-delay:-0.9s" d="M0-6Q1-1 6 0Q1 1 0 6Q-1 1-6 0Q-1-1 0-6Z" fill="#FFFFFF"/></g><g transform="translate(12 60) scale(0.9)"><path class="sh-spark" style="animation-delay:-1.6s" d="M0-6Q1-1 6 0Q1 1 0 6Q-1 1-6 0Q-1-1 0-6Z" fill="#FFFFFF"/></g><g transform="translate(264 60) scale(1)"><path class="sh-spark" style="animation-delay:-0.3s" d="M0-6Q1-1 6 0Q1 1 0 6Q-1 1-6 0Q-1-1 0-6Z" fill="#FFFFFF"/></g><g transform="translate(240 128) scale(0.8)"><path class="sh-spark" style="animation-delay:-1.2s" d="M0-6Q1-1 6 0Q1 1 0 6Q-1 1-6 0Q-1-1 0-6Z" fill="#FFFFFF"/></g><g transform="translate(36 128) scale(0.8)"><path class="sh-spark" style="animation-delay:-2s" d="M0-6Q1-1 6 0Q1 1 0 6Q-1 1-6 0Q-1-1 0-6Z" fill="#FFFFFF"/></g></symbol></svg>
 
 <div id="loginView" class="login-box">
   <div class="brand" style="flex-direction:column;gap:6px;">
